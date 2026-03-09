@@ -1,16 +1,43 @@
+import logging
 from datetime import datetime
 
+import httpx
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from daddy_bot.utils.patterns import ERIKA_RE, PEUR_RE, QUOI_RE, SHALOM_RE, WOMEN_RE
 
+logger = logging.getLogger(__name__)
+
 router = Router(name="auto_triggers")
+
+_ERIKA_URL = "https://www.myinstants.com/media/sounds/erikaaaa_aIVbt8n.mp3"
+_ERIKA_HARDBASS_URL = "https://www.myinstants.com/media/sounds/erika-german-song-remix.mp3"
 
 
 @router.message(F.text.func(lambda value: bool(value and ERIKA_RE.search(value))))
 async def on_erika(message: Message) -> None:
-    await message.answer("Erika detectee. Module execute.", disable_notification=True)
+    text = message.text or ""
+    is_hardbass = "hardbass" in text.lower()
+
+    url = _ERIKA_HARDBASS_URL if is_hardbass else _ERIKA_URL
+    caption = "<i>C'était le vrai bon temps...</i>" if is_hardbass else "<i>C'était le bon temps...</i>"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            audio_data = response.content
+    except httpx.HTTPError as exc:
+        logger.warning("Failed to fetch Erika audio from %s: %s", url, exc)
+        return
+
+    await message.reply_audio(
+        audio=BufferedInputFile(audio_data, filename="erika.mp3"),
+        caption=caption,
+        parse_mode="HTML",
+        disable_notification=True,
+    )
 
 
 @router.message(F.text.func(lambda value: bool(value and SHALOM_RE.search(value))))
