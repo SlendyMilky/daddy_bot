@@ -1,0 +1,25 @@
+[project]
+name = "daddy-bot"
+version = "0.1.0"
+description = "Daddy Telegram bot migrated from n8n to modular aiogram."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.22.0",
+    "pydantic-settings>=2.11.0",
+    "httpx>=0.28.1",
+    "openai>=1.108.1",
+]
+
+[project.scripts]
+daddy-bot = "daddy_bot.main:run"
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
