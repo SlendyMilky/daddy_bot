@@ -7,7 +7,6 @@ from pathlib import Path
 import httpx
 from aiogram import F, Router
 from aiogram.types import (
-    BufferedInputFile,
     CallbackQuery,
     FSInputFile,
     InlineKeyboardButton,
@@ -23,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="auto_triggers")
 
-_ERIKA_URL = "https://www.myinstants.com/media/sounds/erikaaaa_aIVbt8n.mp3"
-_ERIKA_HARDBASS_URL = "https://www.myinstants.com/media/sounds/erika-german-song-remix.mp3"
+_ERIKA_DIR = Path(__file__).parents[3] / "assets" / "erika"
 
 
 @router.message(F.text.func(lambda value: bool(value and ERIKA_RE.search(value))))
@@ -32,20 +30,11 @@ async def on_erika(message: Message) -> None:
     text = message.text or ""
     is_hardbass = "hardbass" in text.lower()
 
-    url = _ERIKA_HARDBASS_URL if is_hardbass else _ERIKA_URL
+    audio_file = _ERIKA_DIR / ("erika_hard_bass.mp3" if is_hardbass else "erika.mp3")
     caption = "<i>C'était le vrai bon temps...</i>" if is_hardbass else "<i>C'était le bon temps...</i>"
 
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            audio_data = response.content
-    except httpx.HTTPError as exc:
-        logger.warning("Failed to fetch Erika audio from %s: %s", url, exc)
-        return
-
     await message.reply_audio(
-        audio=BufferedInputFile(audio_data, filename="erika.mp3"),
+        audio=FSInputFile(audio_file),
         caption=caption,
         parse_mode="HTML",
         disable_notification=True,

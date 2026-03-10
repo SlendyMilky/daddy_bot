@@ -1,6 +1,9 @@
+import base64
+import html
 import logging
 
 import httpx
+from openai import AsyncOpenAI
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message, ReplyParameters
@@ -93,6 +96,35 @@ _MIME_TO_EXT: dict[str, str] = {
     "audio/flac": "flac",
     "audio/x-flac": "flac",
 }
+
+
+_I2T_MAX_BYTES = 20 * 1024 * 1024  # Telegram Bot API hard limit
+_I2T_PROMPT = (
+    "Décrit le plus précisément possible l'image. "
+    "Si il y a du texte autre que du français traduit le en français. "
+    "S'il semble y avoir des interrogations, essaye d'y répondre. "
+    "Après ce message aucune interaction ne sera possible avec toi, "
+    "ta réponse ne doit donc pas être ouverte."
+)
+_IMAGE_MIMES: dict[str, str] = {
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+}
+
+
+def _detect_image_mime(raw: bytes) -> str | None:
+    """Return the MIME type from magic bytes, or None if unsupported."""
+    if raw[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if raw[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if raw[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def _detect_ext(raw: bytes, fallback: str) -> str:
@@ -222,11 +254,89 @@ async def on_s2t(message: Message) -> None:
         await message.answer(part, parse_mode="HTML", disable_notification=True)
 
 
+@router.message(Command("i2t"))
 @router.message(
     F.func(lambda message: isinstance(message, Message) and bool(I2T_RE.search(_full_text(message))))
 )
 async def on_i2t(message: Message) -> None:
-    await _send_stub(message, "i2t")
+    settings = get_settings()
+    if not settings.openai_api_key:
+        await message.reply("OPENAI_API_KEY non configurée.", parse_mode="HTML")
+        return
+
+    # Resolve file_id: direct image on message, or replied-to message
+    replied = message.reply_to_message
+    file_id: str | None = None
+    if replied:
+        if replied.photo:
+            file_id = max(replied.photo, key=lambda p: p.width * p.height).file_id
+        elif replied.document and (replied.document.mime_type or "").startswith("image/"):
+            file_id = replied.document.file_id
+    if not file_id:
+        if message.photo:
+            file_id = max(message.photo, key=lambda p: p.width * p.height).file_id
+        elif message.document and (message.document.mime_type or "").startswith("image/"):
+            file_id = message.document.file_id
+    if not file_id:
+        await message.reply(
+            "Merci de faire la commande en utilisant la fonction répondre sur l'image à décrire.",
+            parse_mode="HTML",
+        )
+        return
+
+    status_msg = await message.reply(
+        "<i>Analyse en cours...</i>",
+        parse_mode="HTML",
+        disable_notification=True,
+    )
+
+    try:
+        bot = message.bot
+        assert bot is not None
+        tg_file = await bot.get_file(file_id)
+        if tg_file.file_size and tg_file.file_size > _I2T_MAX_BYTES:
+            await status_msg.edit_text("Désolé le fichier est trop grand.", parse_mode="HTML")
+            return
+        assert tg_file.file_path is not None
+        buf = await bot.download_file(tg_file.file_path)
+        assert buf is not None
+        if hasattr(buf, "seek"):
+            buf.seek(0)
+        raw = buf.read() if hasattr(buf, "read") else bytes(buf)
+
+        mime = _detect_image_mime(raw)
+        if not mime:
+            await status_msg.edit_text("Désolé, format non pris en charge.", parse_mode="HTML")
+            return
+
+        image_b64 = base64.b64encode(raw).decode()
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}},
+                        {"type": "text", "text": _I2T_PROMPT},
+                    ],
+                }
+            ],
+        )
+
+        description = html.escape(response.choices[0].message.content or "")
+        usage = response.usage
+        if usage:
+            cost = (usage.prompt_tokens * 0.00015 + usage.completion_tokens * 0.00060) / 1000
+            footer = f"\n\n🫰 - ${cost:.4f} | 🤖 - {response.model} | 💬 - {usage.total_tokens} tokens"
+        else:
+            footer = f"\n\n🤖 - {response.model}"
+
+        await status_msg.edit_text(description + footer, parse_mode="HTML")
+
+    except Exception as exc:
+        logger.exception("i2t analysis failed: %s", exc)
+        await status_msg.edit_text("Une erreur est survenue lors de l'analyse.", parse_mode="HTML")
 
 
 @router.message(
