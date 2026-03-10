@@ -12,6 +12,9 @@ dependencies = [
     "trafilatura>=2.0.0",
 ]
 
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
 [project.scripts]
 daddy-bot = "daddy_bot.main:run"
 
