@@ -16,7 +16,7 @@ from aiogram.types import (
 )
 
 from daddy_bot.core.config import get_settings
-from daddy_bot.utils.patterns import ERIKA_RE, PEUR_RE, QUOI_RE, SHALOM_RE, WOMEN_RE
+from daddy_bot.utils.patterns import BRICOLEUR_RE, ERIKA_RE, PEUR_RE, QUOI_RE, SHALOM_RE, WOMEN_RE
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,26 @@ async def on_women(message: Message) -> None:
             audio=FSInputFile(_WOMEN_DIR / "kouizine.ogg"),
             caption="<i>Koui Koui Kouizine !</i>",
             parse_mode="HTML",
+            disable_notification=True,
+        )
+
+
+_BRICOLEUR_DIR = Path(__file__).parents[3] / "assets" / "bricoleur"
+
+
+@router.message(F.text.func(lambda value: bool(value and BRICOLEUR_RE.search(value))))
+async def on_bricoleur(message: Message) -> None:
+    audio = FSInputFile(_BRICOLEUR_DIR / "Le Bricoleur.mp3")
+
+    # If the trigger message is itself a reply, send the audio as a reply to that parent message
+    if message.reply_to_message:
+        await message.reply_to_message.reply_audio(
+            audio=audio,
+            disable_notification=True,
+        )
+    else:
+        await message.reply_audio(
+            audio=audio,
             disable_notification=True,
         )
 

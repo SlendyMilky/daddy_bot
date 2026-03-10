@@ -6,6 +6,7 @@ SHALOM_RE = re.compile(r"shalom", re.IGNORECASE)
 QUOI_RE = re.compile(r"\bquoi\s*[.?!]?\s*$", re.IGNORECASE)
 PEUR_RE = re.compile(r"\bpeur\.?$", re.IGNORECASE)
 WOMEN_RE = re.compile(r"women(?:\.|@daddy_v2_bot)?", re.IGNORECASE)
+BRICOLEUR_RE = re.compile(r"\ble\s+bricoleur\s*[!.]?\s*$", re.IGNORECASE)
 
 # Social detection
 TWITTER_RE = re.compile(r"https://(?:twitter|x)\.com/\S+", re.IGNORECASE)

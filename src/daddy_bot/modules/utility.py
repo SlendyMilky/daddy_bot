@@ -1,12 +1,26 @@
+import asyncio
 import base64
 import html
+import json
 import logging
 
 import httpx
-from openai import AsyncOpenAI
-from aiogram import F, Router
+import trafilatura
+import re
+
+from aiogram import Bot, F, Router
+from aiogram.enums import MessageEntityType
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message, ReplyParameters
+from aiogram.filters.callback_data import CallbackData
+from aiogram.types import (
+    CallbackQuery,
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyParameters,
+)
+from openai import AsyncOpenAI
 
 from daddy_bot.core.config import get_settings
 from daddy_bot.utils.patterns import I2T_RE, RESUME_RE, S2T_RE, T2I_RE, T2S_RE, UNLOCK_RE
@@ -144,6 +158,57 @@ def _detect_ext(raw: bytes, fallback: str) -> str:
     return fallback
 
 
+_RESUME_MODEL = "gpt-5-mini"
+_RESUME_AUDIO_SYSTEM = (
+    "Tu dois résumer en français le message que tu reçois, "
+    "ce message est une transcription audio."
+)
+_RESUME_URL_SYSTEM = "Tu dois résumer de façon très brève en français le contenu que tu reçois."
+_WHISPER_COST_PER_SEC = 0.0001  # $0.006/min = $0.0001/sec
+
+
+def _extract_url(msg: Message) -> str | None:
+    """Extract the first URL from message entities (text or caption)."""
+    text = msg.text or msg.caption or ""
+    entities = msg.entities or msg.caption_entities or []
+    for entity in entities:
+        if entity.type == MessageEntityType.URL:
+            return text[entity.offset : entity.offset + entity.length]
+        if entity.type == MessageEntityType.TEXT_LINK and entity.url:
+            return entity.url
+    return None
+
+
+async def _transcribe_audio(file_id: str, mime_type: str, bot: Bot, api_key: str) -> str:
+    """Download audio from Telegram and transcribe with Whisper. Returns transcript text."""
+    tg_file = await bot.get_file(file_id)
+    assert tg_file.file_path is not None
+    buf = await bot.download_file(tg_file.file_path)
+    assert buf is not None
+    if hasattr(buf, "seek"):
+        buf.seek(0)
+    raw = buf.read() if hasattr(buf, "read") else bytes(buf)
+    if not raw:
+        raise ValueError("Downloaded audio file is empty")
+
+    base_mime = mime_type.split(";")[0].strip().lower()
+    mime_ext = _MIME_TO_EXT.get(base_mime) or base_mime.split("/")[-1] or "ogg"
+    ext = _detect_ext(raw, mime_ext)
+    logger.info("transcribe: ext=%s mime=%s size=%d magic=%s", ext, mime_type, len(raw), raw[:8].hex())
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            data={"model": "whisper-1"},
+            files={"file": (f"audio.{ext}", raw)},
+        )
+        if response.is_error:
+            logger.error("Whisper response body: %s", response.text)
+        response.raise_for_status()
+    return response.json()["text"].strip()
+
+
 def _split_transcription(text: str) -> list[str]:
     """Split transcription text into Telegram-safe HTML chunks."""
     first = f"{_S2T_HEADER}<i>{text}</i>"
@@ -201,7 +266,6 @@ async def on_s2t(message: Message) -> None:
         )
         return
 
-    # Send status message (will be edited in-place with the result)
     status_msg = await replied.reply(
         "<i>Transcription en cours...</i>",
         parse_mode="HTML",
@@ -211,41 +275,10 @@ async def on_s2t(message: Message) -> None:
     try:
         bot = message.bot
         assert bot is not None
-        tg_file = await bot.get_file(file_id)
-        assert tg_file.file_path is not None
-        buf = await bot.download_file(tg_file.file_path)
-        assert buf is not None
-
-        base_mime = mime_type.split(";")[0].strip().lower()
-        mime_ext = _MIME_TO_EXT.get(base_mime) or base_mime.split("/")[-1] or "ogg"
-        if hasattr(buf, "seek"):
-            buf.seek(0)
-        raw = buf.read() if hasattr(buf, "read") else bytes(buf)
-        ext = _detect_ext(raw, mime_ext)
-        logger.info(
-            "s2t: ext=%s (mime_ext=%s) mime=%s size=%d bytes magic=%s",
-            ext, mime_ext, mime_type, len(raw), raw[:8].hex(),
-        )
-        if not raw:
-            raise ValueError("Downloaded file is empty")
-
-        async with httpx.AsyncClient(timeout=120) as http_client:
-            response = await http_client.post(
-                "https://api.openai.com/v1/audio/transcriptions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                data={"model": "whisper-1"},
-                files={"file": (f"audio.{ext}", raw)},
-            )
-            if response.is_error:
-                logger.error("s2t OpenAI response body: %s", response.text)
-            response.raise_for_status()
-        text = response.json()["text"].strip()
+        text = await _transcribe_audio(file_id, mime_type, bot, settings.openai_api_key)
     except Exception as exc:
         logger.exception("s2t transcription failed: %s", exc)
-        await status_msg.edit_text(
-            "Une erreur est survenue lors de la transcription.",
-            parse_mode="HTML",
-        )
+        await status_msg.edit_text("Une erreur est survenue lors de la transcription.", parse_mode="HTML")
         return
 
     parts = _split_transcription(text)
@@ -339,39 +372,254 @@ async def on_i2t(message: Message) -> None:
         await status_msg.edit_text("Une erreur est survenue lors de l'analyse.", parse_mode="HTML")
 
 
+@router.message(Command("resume"))
 @router.message(
     F.func(lambda message: isinstance(message, Message) and bool(RESUME_RE.search(_full_text(message))))
 )
 async def on_resume(message: Message) -> None:
-    await _send_stub(message, "resume")
+    settings = get_settings()
+    if not settings.openai_api_key:
+        await message.reply("OPENAI_API_KEY non configurée.", parse_mode="HTML")
+        return
+
+    bot = message.bot
+    assert bot is not None
+    replied = message.reply_to_message
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+    # ── Mode audio ────────────────────────────────────────────────────────────
+    audio_file_id: str | None = None
+    audio_mime = "audio/ogg"
+    audio_duration = 0
+    audio_username: str | None = None
+
+    if replied:
+        if replied.voice:
+            audio_file_id = replied.voice.file_id
+            audio_mime = replied.voice.mime_type or "audio/ogg"
+            audio_duration = replied.voice.duration or 0
+        elif replied.audio:
+            audio_file_id = replied.audio.file_id
+            audio_mime = replied.audio.mime_type or "audio/mpeg"
+            audio_duration = replied.audio.duration or 0
+        elif replied.document and (replied.document.mime_type or "").startswith("audio/"):
+            audio_file_id = replied.document.file_id
+            audio_mime = replied.document.mime_type or "audio/mpeg"
+        if audio_file_id and replied.from_user:
+            audio_username = replied.from_user.username
+
+    if audio_file_id:
+        status_msg = await replied.reply(
+            "<i>Résumé en cours...</i>", parse_mode="HTML", disable_notification=True
+        )
+        try:
+            transcription = await _transcribe_audio(audio_file_id, audio_mime, bot, settings.openai_api_key)
+            gpt_resp = await client.chat.completions.create(
+                model=_RESUME_MODEL,
+                messages=[
+                    {"role": "system", "content": _RESUME_AUDIO_SYSTEM},
+                    {"role": "system", "content": f"Message provenant de : {audio_username or 'inconnu'}"},
+                    {"role": "user", "content": transcription},
+                ],
+            )
+            summary = html.escape(gpt_resp.choices[0].message.content or "")
+            whisper_cost = audio_duration * _WHISPER_COST_PER_SEC
+            usage = gpt_resp.usage
+            tokens = usage.total_tokens if usage else "?"
+            footer = f"\n\n🎙️ - ${whisper_cost:.3f} | 🤖 - {gpt_resp.model} | 💬 - {tokens} tokens"
+            await status_msg.edit_text(summary + footer, parse_mode="HTML")
+        except Exception as exc:
+            logger.exception("resume audio failed: %s", exc)
+            await status_msg.edit_text("Erreur lors du résumé...", parse_mode="HTML")
+        return
+
+    # ── Mode URL ──────────────────────────────────────────────────────────────
+    url = _extract_url(message)
+    if not url and replied:
+        url = _extract_url(replied)
+
+    if not url:
+        await message.reply(
+            "Merci de faire la commande en utilisant la fonction répondre sur l'URL ou l'audio à résumer.",
+            parse_mode="HTML",
+        )
+        return
+
+    status_msg = await message.reply(
+        "<i>Résumé en cours du lien...</i>", parse_mode="HTML", disable_notification=True
+    )
+    try:
+        async with httpx.AsyncClient(
+            timeout=30,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+        ) as http_client:
+            resp = await http_client.get(url)
+            resp.raise_for_status()
+            page_html = resp.text
+
+        result_json_str = await asyncio.to_thread(
+            trafilatura.extract,
+            page_html,
+            output_format="json",
+            with_metadata=True,
+            include_comments=False,
+            include_tables=False,
+        )
+        meta: dict = json.loads(result_json_str) if result_json_str else {}
+        plain_text = meta.get("text") or meta.get("raw_text") or page_html[:8000]
+        title = meta.get("title") or ""
+        site_name = meta.get("sitename") or ""
+        image_url = meta.get("image") or ""
+
+        messages_gpt = [{"role": "system", "content": _RESUME_URL_SYSTEM}]
+        if title:
+            messages_gpt.append({"role": "user", "content": f"Titre : {title}"})
+        messages_gpt.append({"role": "user", "content": plain_text[:8000]})
+
+        gpt_resp = await client.chat.completions.create(model=_RESUME_MODEL, messages=messages_gpt)
+        summary = html.escape(gpt_resp.choices[0].message.content or "")
+        usage = gpt_resp.usage
+        tokens = usage.total_tokens if usage else "?"
+
+        footer_parts = []
+        if image_url:
+            footer_parts.append(f'📸 - <a href="{html.escape(image_url)}">Photo</a>')
+        footer_parts += [f"🤖 - {gpt_resp.model}", f"💬 - {tokens} tokens"]
+        if site_name:
+            footer_parts.append(f'🌐 - <a href="{html.escape(url)}">{html.escape(site_name)}</a>')
+
+        await status_msg.edit_text(
+            summary + "\n\n" + " | ".join(footer_parts),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+    except Exception as exc:
+        logger.exception("resume URL failed: %s", exc)
+        await status_msg.edit_text("Erreur lors du résumé du lien...", parse_mode="HTML")
 
 
+class _T2iQuality(CallbackData, prefix="t2i_q"):
+    quality: str  # "standard" | "hd"
+
+
+class _T2iSize(CallbackData, prefix="t2i_s"):
+    quality: str
+    size: str  # "1024x1024" | "1024x1792" | "1792x1024"
+
+
+_T2I_PROMPT_MARKER = "Description de l'image à générer ?"
+_T2I_SIZES: list[tuple[str, str]] = [
+    ("1024×1024", "1024x1024"),
+    ("1024×1792", "1024x1792"),
+    ("1792×1024", "1792x1024"),
+]
+
+
+def _t2i_is_owner(user_id: int) -> bool:
+    owners = get_settings().owner_id_set()
+    return not owners or user_id in owners
+
+
+# ── Step 1: /t2i command ─────────────────────────────────────────────────────
+@router.message(Command("t2i"))
 @router.message(
     F.func(lambda message: isinstance(message, Message) and bool(T2I_RE.search(_full_text(message))))
 )
 async def on_t2i_message(message: Message) -> None:
-    await _send_stub(message, "t2i")
+    if not message.from_user or not _t2i_is_owner(message.from_user.id):
+        await message.reply("⛔ Accès non autorisé.", parse_mode="HTML")
+        return
+    if not get_settings().openai_api_key:
+        await message.reply("OPENAI_API_KEY non configurée.", parse_mode="HTML")
+        return
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Standard", callback_data=_T2iQuality(quality="standard").pack()),
+        InlineKeyboardButton(text="HD", callback_data=_T2iQuality(quality="hd").pack()),
+    ]])
+    await message.reply("Génération Standard ou HD ?", reply_markup=keyboard)
 
 
-@router.callback_query(F.data.contains("t2i"))
-async def on_t2i_callback(callback: CallbackQuery) -> None:
-    if callback.message:
-        await callback.message.answer(
-            "Le module `t2i` est en cours de migration depuis n8n.",
-            disable_notification=True,
+# ── Step 2: quality selected → edit to resolution keyboard ───────────────────
+@router.callback_query(_T2iQuality.filter())
+async def on_t2i_quality(callback: CallbackQuery, callback_data: _T2iQuality) -> None:
+    if not _t2i_is_owner(callback.from_user.id):
+        await callback.answer("⛔ Accès non autorisé.", show_alert=True)
+        return
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text=label,
+            callback_data=_T2iSize(quality=callback_data.quality, size=api_size).pack(),
         )
+        for label, api_size in _T2I_SIZES
+    ]])
+    if callback.message:
+        await callback.message.edit_text("Résolution de l'image ?", reply_markup=keyboard)
     await callback.answer()
 
 
+# ── Step 3: resolution selected → delete keyboard, send ForceReply ───────────
+@router.callback_query(_T2iSize.filter())
+async def on_t2i_size(callback: CallbackQuery, callback_data: _T2iSize) -> None:
+    if not _t2i_is_owner(callback.from_user.id):
+        await callback.answer("⛔ Accès non autorisé.", show_alert=True)
+        return
+    quality_label = "HD" if callback_data.quality == "hd" else "Standard"
+    size_label = next((lbl for lbl, api in _T2I_SIZES if api == callback_data.size), callback_data.size)
+    if callback.message:
+        await callback.message.answer(
+            f"{_T2I_PROMPT_MARKER}\n\nSéléction : {quality_label} {size_label}",
+            reply_markup=ForceReply(selective=True),
+        )
+        await callback.message.delete()
+    await callback.answer()
+
+
+# ── Step 4: user replies to the ForceReply with their prompt ─────────────────
 @router.message(
     F.func(
-        lambda message: isinstance(message, Message)
-        and bool(message.reply_to_message)
-        and "Description de l'image a generer ?" in ((message.reply_to_message.text or ""))
+        lambda m: isinstance(m, Message)
+        and bool(m.reply_to_message)
+        and _T2I_PROMPT_MARKER in (m.reply_to_message.text or "")
     )
 )
 async def on_t2i_reply_chain(message: Message) -> None:
-    await _send_stub(message, "t2i")
+    if not message.from_user or not _t2i_is_owner(message.from_user.id):
+        await message.reply("⛔ Accès non autorisé.", parse_mode="HTML")
+        return
+
+    reply_text = message.reply_to_message.text or ""  # type: ignore[union-attr]
+    quality = "hd" if "HD" in reply_text else "standard"
+    size_match = re.search(r"(\d+[×x]\d+)", reply_text)
+    size = size_match.group(1).replace("×", "x") if size_match else "1024x1024"
+    prompt = (message.text or "").strip()
+    if not prompt:
+        await message.reply("Veuillez entrer une description.", parse_mode="HTML")
+        return
+
+    status_msg = await message.reply(
+        "<i>Génération en cours...</i>", parse_mode="HTML", disable_notification=True
+    )
+    try:
+        client = AsyncOpenAI(api_key=get_settings().openai_api_key)
+        response = await client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=size,  # type: ignore[arg-type]
+            quality=quality,  # type: ignore[arg-type]
+            n=1,
+        )
+        image_url = response.data[0].url
+        revised = response.data[0].revised_prompt or prompt
+        await status_msg.delete()
+        await message.answer_photo(
+            photo=image_url,
+            caption=f"<i>{html.escape(revised)}</i>",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.exception("t2i generation failed: %s", exc)
+        await status_msg.edit_text("Erreur lors de la génération de l'image.", parse_mode="HTML")
 
 
 @router.message(
