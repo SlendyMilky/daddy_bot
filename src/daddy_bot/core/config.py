@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_start_model: str = Field(default="gpt-4.1-mini", alias="OPENAI_START_MODEL")
 
+    rapidapi_key: str | None = Field(default=None, alias="RAPIDAPI_KEY")
+
     rate_limit_max_events: int = Field(default=8, alias="RATE_LIMIT_MAX_EVENTS")
     rate_limit_window_seconds: int = Field(default=10, alias="RATE_LIMIT_WINDOW_SECONDS")
     rate_limit_cooldown_message: str = Field(
