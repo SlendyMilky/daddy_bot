@@ -1,6 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyParameters
 
 from daddy_bot.utils.patterns import I2T_RE, RESUME_RE, S2T_RE, T2I_RE, T2S_RE, UNLOCK_RE
 
@@ -18,10 +18,58 @@ async def _send_stub(message: Message, module_name: str) -> None:
     )
 
 
+_UNLOCK_SUFFIX = "\n\n<i>Unlock par @daddy_v2_bot</i>"
+
+
 @router.message(Command("unlock"))
 @router.message(F.text.func(lambda value: bool(value and UNLOCK_RE.search(value))))
 async def on_unlock(message: Message) -> None:
-    await _send_stub(message, "unlock")
+    replied = message.reply_to_message
+    if not replied:
+        await message.reply(
+            "Merci de faire la commande en répondant au message à débloquer.",
+            parse_mode="HTML",
+        )
+        return
+
+    reply_params = ReplyParameters(message_id=replied.message_id)
+
+    if replied.photo:
+        photo = max(replied.photo, key=lambda p: p.width * p.height)
+        caption = (replied.caption or "") + _UNLOCK_SUFFIX
+        await message.answer_photo(
+            photo=photo.file_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_parameters=reply_params,
+        )
+    elif replied.video:
+        caption = (replied.caption or "") + _UNLOCK_SUFFIX
+        await message.answer_video(
+            video=replied.video.file_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_parameters=reply_params,
+        )
+    elif replied.document:
+        caption = (replied.caption or "") + _UNLOCK_SUFFIX
+        await message.answer_document(
+            document=replied.document.file_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_parameters=reply_params,
+        )
+    elif replied.text:
+        await message.answer(
+            replied.text + _UNLOCK_SUFFIX,
+            parse_mode="HTML",
+            reply_parameters=reply_params,
+        )
+    else:
+        await message.reply(
+            "Merci de faire la commande en utilisant la fonction répondre sur le message à débloquer.",
+            parse_mode="HTML",
+        )
 
 
 @router.message(Command("s2t"))

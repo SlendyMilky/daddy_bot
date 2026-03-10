@@ -6,7 +6,15 @@ from pathlib import Path
 
 import httpx
 from aiogram import F, Router
-from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, Message
+from aiogram.types import (
+    BufferedInputFile,
+    CallbackQuery,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    ReactionTypeEmoji,
+)
 
 from daddy_bot.core.config import get_settings
 from daddy_bot.utils.patterns import ERIKA_RE, PEUR_RE, QUOI_RE, SHALOM_RE, WOMEN_RE
@@ -164,9 +172,17 @@ async def on_quoi(message: Message) -> None:
         await message.reply("feur.", disable_notification=True, parse_mode="HTML")
 
 
+_PEUR_DIR = Path(__file__).parents[3] / "assets" / "peur"
+
+
 @router.message(F.text.func(lambda value: bool(value and PEUR_RE.search(value))))
 async def on_peur(message: Message) -> None:
-    await message.answer("Bleue.", disable_notification=True)
+    if random.random() >= 0.05:
+        return
+    await message.reply_audio(
+        audio=FSInputFile(_PEUR_DIR / "peur.ogg"),
+        disable_notification=True,
+    )
 
 
 _WOMEN_DIR = Path(__file__).parents[3] / "assets" / "women"
@@ -200,18 +216,27 @@ async def on_women(message: Message) -> None:
         )
 
 
+_HEURE_STICKER_ID = "CAACAgQAAxkBAAIBtmSkc2K1hZnzDn5-6H3KASo3L9UcAAI2DgACJ3LhU_Eaikb-lJIJLwQ"
+_HEURE_KEYBOARD = InlineKeyboardMarkup(
+    inline_keyboard=[[InlineKeyboardButton(text="Connaître l'heure.", callback_data="timenowplease")]]
+)
+
+
 @router.message(
     F.sticker.emoji.func(lambda value: bool(value and "⏰" in value))
-    | F.sticker.set_name.func(lambda value: bool(value and "suisse52" in value))
+    & F.sticker.set_name.func(lambda value: bool(value and "suisse52" in value))
 )
 async def on_heure_sticker(message: Message) -> None:
-    now = datetime.now().strftime("%H:%M:%S")
-    await message.answer(f"Il est {now}.", disable_notification=True)
+    await message.react([ReactionTypeEmoji(emoji="🤓")])
+    await message.reply_sticker(
+        sticker=_HEURE_STICKER_ID,
+        reply_markup=_HEURE_KEYBOARD,
+        disable_notification=True,
+    )
 
 
 @router.callback_query(F.data == "timenowplease")
 async def on_heure_callback(callback: CallbackQuery) -> None:
     now = datetime.now().strftime("%H:%M:%S")
-    if callback.message:
-        await callback.message.answer(f"Il est {now}.", disable_notification=True)
-    await callback.answer()
+    username = callback.from_user.username if callback.from_user else "?"
+    await callback.answer(text=f"Il est {now} @{username} 😐", show_alert=False)
