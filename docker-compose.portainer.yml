@@ -5,6 +5,7 @@ services:
     image: ${DADDY_BOT_IMAGE:-ghcr.io/slendymilky/daddy_bot:latest}
     restart: unless-stopped
     environment:
+      TZ: Europe/Zurich
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_START_MODEL: ${OPENAI_START_MODEL:-gpt-4.1-mini}
