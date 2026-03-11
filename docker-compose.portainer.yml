@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  daddy-bot:
+    image: ${DADDY_BOT_IMAGE:-ghcr.io/slendymilky/daddy_bot:latest}
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_START_MODEL: ${OPENAI_START_MODEL:-gpt-4.1-mini}
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
+      RATE_LIMIT_MAX_EVENTS: ${RATE_LIMIT_MAX_EVENTS:-8}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-10}
+      RATE_LIMIT_COOLDOWN_MESSAGE: ${RATE_LIMIT_COOLDOWN_MESSAGE:-Doucement champion, respire 2 secondes et recommence.}
+      OWNER_IDS: ${OWNER_IDS:-}
+    volumes:
+      - daddy_bot_data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  daddy_bot_data:

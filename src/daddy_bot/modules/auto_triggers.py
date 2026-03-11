@@ -1,11 +1,12 @@
 import asyncio
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import httpx
 from aiogram import F, Router
+from aiogram.enums import ChatAction
 from aiogram.types import (
     CallbackQuery,
     FSInputFile,
@@ -230,6 +231,71 @@ _HEURE_KEYBOARD = InlineKeyboardMarkup(
     inline_keyboard=[[InlineKeyboardButton(text="Connaître l'heure.", callback_data="timenowplease")]]
 )
 
+_MAISCSUPERSA_AUDIO_FILE = Path(__file__).parents[3] / "assets" / "maiscsupersa" / "maiscsupersa.ogg"
+_MAISCSUPERSA_BASE_CHANCE = 0.0001  # 0.01% per text message
+_MAISCSUPERSA_STREAK_WINDOW = timedelta(seconds=45)
+_MAISCSUPERSA_MAX_CHANCE = 0.0005  # cap at 0.05%
+_MAISCSUPERSA_COOLDOWN = timedelta(hours=24)
+_MAISCSUPERSA_RECORDING_SECONDS = 8
+_MAISCSUPERSA_CHAT_ACTION_REFRESH = 4
+_maiscsupersa_last_sent_at: datetime | None = None
+_maiscsupersa_pending = False
+_maiscsupersa_lock = asyncio.Lock()
+_maiscsupersa_user_streaks: dict[int, tuple[int, datetime]] = {}
+
+
+def _maiscsupersa_multiplier(streak: int) -> float:
+    if streak >= 6:
+        return 5.0
+    if streak == 5:
+        return 3.0
+    if streak == 4:
+        return 2.0
+    return 1.0
+
+
+def _update_maiscsupersa_streak(user_id: int, now: datetime) -> int:
+    previous = _maiscsupersa_user_streaks.get(user_id)
+    if previous is None:
+        streak = 1
+    else:
+        previous_streak, previous_at = previous
+        if now - previous_at <= _MAISCSUPERSA_STREAK_WINDOW:
+            streak = min(previous_streak + 1, 12)
+        else:
+            streak = 1
+
+    _maiscsupersa_user_streaks[user_id] = (streak, now)
+    return streak
+
+
+async def _reserve_maiscsupersa_slot(now: datetime) -> bool:
+    global _maiscsupersa_pending
+    async with _maiscsupersa_lock:
+        if _maiscsupersa_pending:
+            return False
+        if _maiscsupersa_last_sent_at and now - _maiscsupersa_last_sent_at < _MAISCSUPERSA_COOLDOWN:
+            return False
+        _maiscsupersa_pending = True
+        return True
+
+
+async def _release_maiscsupersa_slot(*, sent: bool) -> None:
+    global _maiscsupersa_last_sent_at, _maiscsupersa_pending
+    async with _maiscsupersa_lock:
+        if sent:
+            _maiscsupersa_last_sent_at = datetime.utcnow()
+        _maiscsupersa_pending = False
+
+
+async def _simulate_recording(message: Message) -> None:
+    remaining = _MAISCSUPERSA_RECORDING_SECONDS
+    while remaining > 0:
+        await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.RECORD_VOICE)
+        step = min(_MAISCSUPERSA_CHAT_ACTION_REFRESH, remaining)
+        await asyncio.sleep(step)
+        remaining -= step
+
 
 @router.message(
     F.sticker.emoji.func(lambda value: bool(value and "⏰" in value))
@@ -249,3 +315,45 @@ async def on_heure_callback(callback: CallbackQuery) -> None:
     now = datetime.now().strftime("%H:%M:%S")
     username = callback.from_user.username if callback.from_user else "?"
     await callback.answer(text=f"Il est {now} @{username} 😐", show_alert=False)
+
+
+@router.message(F.text)
+async def on_maiscsupersa_random_voice(message: Message) -> None:
+    user = message.from_user
+    if user is None or user.is_bot:
+        return
+
+    now = datetime.utcnow()
+    streak = _update_maiscsupersa_streak(user.id, now)
+    multiplier = _maiscsupersa_multiplier(streak)
+    chance = min(_MAISCSUPERSA_BASE_CHANCE * multiplier, _MAISCSUPERSA_MAX_CHANCE)
+    roll = random.random()
+
+    if multiplier > 1:
+        logger.info(
+            "Maiscsupersa streak bonus for user=%s streak=%s multiplier=%.2f chance=%.5f",
+            user.id,
+            streak,
+            multiplier,
+            chance,
+        )
+
+    if roll >= chance:
+        return
+
+    if not await _reserve_maiscsupersa_slot(now):
+        logger.info("Maiscsupersa skipped: pending trigger or 24h cooldown active")
+        return
+
+    sent = False
+    try:
+        logger.info("Maiscsupersa trigger accepted for user=%s roll=%.6f chance=%.5f", user.id, roll, chance)
+        await _simulate_recording(message)
+        await message.reply_audio(
+            audio=FSInputFile(_MAISCSUPERSA_AUDIO_FILE),
+            disable_notification=True,
+        )
+        sent = True
+        logger.info("Maiscsupersa audio sent in chat=%s as reply to message=%s", message.chat.id, message.message_id)
+    finally:
+        await _release_maiscsupersa_slot(sent=sent)
