@@ -7,6 +7,32 @@ QUOI_RE = re.compile(r"\bquoi\s*[.?!]?\s*$", re.IGNORECASE)
 PEUR_RE = re.compile(r"\bpeur\.?$", re.IGNORECASE)
 WOMEN_RE = re.compile(r"women(?:\.|@daddy_v2_bot)?", re.IGNORECASE)
 BRICOLEUR_RE = re.compile(r"\ble\s+bricoleur\s*[!.]?\s*$", re.IGNORECASE)
+COMMUNISM_RE = re.compile(r"\b(communis(?:me|t(?:e|es|s)?)?|communism|communist(?:s)?)\b", re.IGNORECASE)
+ANTI_COMMUNISM_INSULT_RE = re.compile(
+    r"\b("
+    r"fuck|fucking|putain|ptn|merde|nazi|degueulasse|sale|"
+    r"stupid|idiot|dumb|shit|cringe|hate|deteste|detester|haine"
+    r")\b",
+    re.IGNORECASE,
+)
+DPRK_RE = re.compile(
+    r"\b("
+    r"dprk|"
+    r"north\s*korea|"
+    r"coree\s*du\s*nord|"
+    r"cor[eé]e\s*du\s*nord|"
+    r"kim[\s_-]*jong[\s_-]*un|"
+    r"juche"
+    r")\b",
+    re.IGNORECASE,
+)
+ANTI_DPRK_INSULT_RE = re.compile(
+    r"\b("
+    r"fuck|fucking|putain|ptn|merde|nazi|degueulasse|sale|"
+    r"stupid|idiot|dumb|shit|cringe|hate|deteste|detester|haine"
+    r")\b",
+    re.IGNORECASE,
+)
 
 # Social detection
 TWITTER_RE = re.compile(r"https://(?:twitter|x)\.com/\S+", re.IGNORECASE)

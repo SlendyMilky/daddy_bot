@@ -17,7 +17,18 @@ from aiogram.types import (
 )
 
 from daddy_bot.core.config import get_settings
-from daddy_bot.utils.patterns import BRICOLEUR_RE, ERIKA_RE, PEUR_RE, QUOI_RE, SHALOM_RE, WOMEN_RE
+from daddy_bot.utils.patterns import (
+    ANTI_DPRK_INSULT_RE,
+    ANTI_COMMUNISM_INSULT_RE,
+    BRICOLEUR_RE,
+    COMMUNISM_RE,
+    DPRK_RE,
+    ERIKA_RE,
+    PEUR_RE,
+    QUOI_RE,
+    SHALOM_RE,
+    WOMEN_RE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +235,62 @@ async def on_bricoleur(message: Message) -> None:
             audio=audio,
             disable_notification=True,
         )
+
+
+_COMMUNISTE_DIR = Path(__file__).parents[3] / "assets" / "communiste"
+_COMMUNISTE_AUDIO_EXTENSIONS = {".mp3", ".ogg", ".m4a", ".wav"}
+
+
+@router.message(F.text.func(lambda value: bool(value and COMMUNISM_RE.search(value))))
+async def on_anti_communism(message: Message) -> None:
+    text = message.text or ""
+    if not ANTI_COMMUNISM_INSULT_RE.search(text):
+        return
+
+    audio_candidates = [
+        file_path
+        for file_path in _COMMUNISTE_DIR.iterdir()
+        if file_path.is_file() and file_path.suffix.lower() in _COMMUNISTE_AUDIO_EXTENSIONS
+    ]
+    if not audio_candidates:
+        logger.warning("No communist audio files found in %s", _COMMUNISTE_DIR)
+        await message.reply("Au moins eux, ils font de la bonne musique.", disable_notification=True)
+        return
+
+    selected_audio = random.choice(audio_candidates)
+    await message.reply("Au moins eux, ils font de la bonne musique.", disable_notification=True)
+    await message.reply_audio(
+        audio=FSInputFile(selected_audio),
+        disable_notification=True,
+    )
+
+
+_DPRK_DIR = Path(__file__).parents[3] / "assets" / "DPRK"
+_DPRK_AUDIO_EXTENSIONS = {".mp3", ".ogg", ".m4a", ".wav"}
+
+
+@router.message(F.text.func(lambda value: bool(value and DPRK_RE.search(value))))
+async def on_anti_dprk(message: Message) -> None:
+    text = message.text or ""
+    if not ANTI_DPRK_INSULT_RE.search(text):
+        return
+
+    audio_candidates = [
+        file_path
+        for file_path in _DPRK_DIR.iterdir()
+        if file_path.is_file() and file_path.suffix.lower() in _DPRK_AUDIO_EXTENSIONS
+    ]
+    if not audio_candidates:
+        logger.warning("No DPRK audio files found in %s", _DPRK_DIR)
+        await message.reply("Au moins eux, ils font de la bonne musique.", disable_notification=True)
+        return
+
+    selected_audio = random.choice(audio_candidates)
+    await message.reply("Au moins eux, ils font de la bonne musique.", disable_notification=True)
+    await message.reply_audio(
+        audio=FSInputFile(selected_audio),
+        disable_notification=True,
+    )
 
 
 _HEURE_STICKER_ID = "CAACAgQAAxkBAAIBtmSkc2K1hZnzDn5-6H3KASo3L9UcAAI2DgACJ3LhU_Eaikb-lJIJLwQ"
