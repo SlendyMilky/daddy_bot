@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import contextlib
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -11,6 +12,7 @@ from daddy_bot.core.error_handlers import register_error_handlers
 from daddy_bot.core.logging import setup_logging
 from daddy_bot.core.rate_limit import RateLimitMiddleware, SlidingWindowRateLimiter
 from daddy_bot.core.router_registry import register_routers
+from daddy_bot.modules.bibine import run_bibine_scheduler
 
 
 async def start_bot() -> None:
@@ -40,7 +42,13 @@ async def start_bot() -> None:
     register_error_handlers(dp)
 
     logger.info("Daddy bot started.")
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    scheduler_task = asyncio.create_task(run_bibine_scheduler(bot))
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        scheduler_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await scheduler_task
 
 
 def run() -> None:

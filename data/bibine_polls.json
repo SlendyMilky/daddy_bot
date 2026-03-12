@@ -1,0 +1,22 @@
+{
+  "345019097:2184": {
+    "mentions_html": "<a href=\"tg://user?id=345019097\">@Slendy_Milky</a>",
+    "yes_votes": [],
+    "no_votes": [
+      {
+        "user_id": 345019097,
+        "label": "@Slendy_Milky"
+      }
+    ]
+  },
+  "345019097:2187": {
+    "mentions_html": "<a href=\"tg://user?id=345019097\">@Slendy_Milky</a>",
+    "yes_votes": [],
+    "no_votes": [
+      {
+        "user_id": 345019097,
+        "label": "@Slendy_Milky"
+      }
+    ]
+  }
+}

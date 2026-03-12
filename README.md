@@ -23,7 +23,7 @@ Daddy is a modular Telegram bot migrated from n8n to Python.
 
 ## Migrated in V1
 
-- Commands: `/start`, `/help`, `/cocktail`, `/think`, `/nineball`
+- Commands: `/start`, `/help`, `/cocktail`, `/think`, `/nineball`, `/bibine`, `/bibine_test`
 - Auto triggers: `erika`, `shalom`, `quoi`, `peur`, `women`, location, time callback
 - Stubs: `/unlock`, `/s2t`, `/i2t`, `/resume`, `/t2i`, `/t2s`
 - Social route stubs: twitter/x, tiktok, instagram URL/callback detections
@@ -36,4 +36,6 @@ Daddy is a modular Telegram bot migrated from n8n to Python.
 - Send a location and get a migration acknowledgment.
 - Run `/unlock` and verify stub response.
 - Run `/nineball` and verify random answer.
+- Run `/bibine` twice and verify subscribe/unsubscribe responses.
+- Verify bibine reminder is posted once per week at random time (Thu 15-22 or Fri 09-17).
 - Spam quickly to trigger rate limit cooldown message.

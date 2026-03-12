@@ -20,6 +20,8 @@ class Settings(BaseSettings):
         alias="RATE_LIMIT_COOLDOWN_MESSAGE",
     )
     owner_ids: str | None = Field(default=None, alias="OWNER_IDS")
+    bibine_channel_id: int | None = Field(default=None, alias="BIBINE_CHANNEL_ID")
+    bibine_timezone: str = Field(default="Europe/Paris", alias="BIBINE_TIMEZONE")
 
     def owner_id_set(self) -> set[int]:
         if not self.owner_ids:
