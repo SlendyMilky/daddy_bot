@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 from aiogram import F, Router
 from aiogram.enums import ChatAction
+from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
     FSInputFile,
@@ -309,6 +310,9 @@ _maiscsupersa_last_sent_at: datetime | None = None
 _maiscsupersa_pending = False
 _maiscsupersa_lock = asyncio.Lock()
 _maiscsupersa_user_streaks: dict[int, tuple[int, datetime]] = {}
+_HUH_AUDIO_FILE = Path(__file__).parents[3] / "assets" / "huh" / "huh.ogg"
+_HUH_RECORDING_SECONDS = 1
+_HUH_TRIGGER_STICKER_ID = "CAACAgQAAx0CRL_kIwABAogHabaWjN8KTJMYkAMhOa4fUBbjSS0AAlgSAAKCyiBTEYkPL_XLGb06BA"
 
 
 def _maiscsupersa_multiplier(streak: int) -> float:
@@ -364,6 +368,70 @@ async def _simulate_recording(message: Message) -> None:
         remaining -= step
 
 
+def _is_huh_trigger_sticker(message: Message) -> bool:
+    sticker = message.sticker
+    if not sticker:
+        return False
+
+    trigger_id = _HUH_TRIGGER_STICKER_ID.strip()
+    if not trigger_id:
+        return False
+
+    matched = sticker.file_id == trigger_id or sticker.file_unique_id == trigger_id
+    if not matched:
+        logger.debug(
+            "HUH sticker mismatch: got file_id=%s file_unique_id=%s set_name=%s emoji=%s",
+            sticker.file_id,
+            sticker.file_unique_id,
+            sticker.set_name,
+            sticker.emoji,
+        )
+    return matched
+
+
+async def _send_huh_voice(message: Message) -> None:
+    await message.bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.RECORD_VOICE)
+    await asyncio.sleep(_HUH_RECORDING_SECONDS)
+
+    voice = FSInputFile(_HUH_AUDIO_FILE)
+    if message.reply_to_message:
+        await message.reply_to_message.reply_voice(
+            voice=voice,
+            disable_notification=True,
+        )
+        return
+
+    await message.answer_voice(
+        voice=voice,
+        disable_notification=True,
+    )
+
+
+@router.message(Command("stickerid"))
+async def on_stickerid(message: Message) -> None:
+    target = message.sticker
+    if target is None and message.reply_to_message:
+        target = message.reply_to_message.sticker
+
+    if target is None:
+        await message.reply(
+            "Envoie <code>/stickerid</code> en reply d'un sticker (ou avec un sticker).",
+            parse_mode="HTML",
+            disable_notification=True,
+        )
+        return
+
+    await message.reply(
+        "IDs du sticker:\n"
+        f"- <code>file_id</code>: <code>{target.file_id}</code>\n"
+        f"- <code>file_unique_id</code>: <code>{target.file_unique_id}</code>\n"
+        f"- set: <code>{target.set_name or 'n/a'}</code>\n"
+        f"- emoji: <code>{target.emoji or 'n/a'}</code>",
+        parse_mode="HTML",
+        disable_notification=True,
+    )
+
+
 @router.message(
     F.sticker.emoji.func(lambda value: bool(value and "⏰" in value))
     & F.sticker.set_name.func(lambda value: bool(value and "suisse52" in value))
@@ -382,6 +450,13 @@ async def on_heure_callback(callback: CallbackQuery) -> None:
     now = datetime.now().strftime("%H:%M:%S")
     username = callback.from_user.username if callback.from_user else "?"
     await callback.answer(text=f"Il est {now} @{username} 😐", show_alert=False)
+
+
+@router.message(F.sticker)
+async def on_huh_sticker(message: Message) -> None:
+    if not _is_huh_trigger_sticker(message):
+        return
+    await _send_huh_voice(message)
 
 
 @router.message(F.text)
