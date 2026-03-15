@@ -25,6 +25,7 @@ from daddy_bot.utils.patterns import (
     COMMUNISM_RE,
     DPRK_RE,
     ERIKA_RE,
+    JEW_AUDIO_TRIGGER_RE,
     PEUR_RE,
     QUOI_RE,
     SHALOM_RE,
@@ -55,6 +56,23 @@ async def on_erika(message: Message) -> None:
 
 
 _SHALOM_DIR = Path(__file__).parents[3] / "assets" / "shalom"
+_JEW_DIR = Path(__file__).parents[3] / "assets" / "jew"
+_JEW_AUDIO_EXTENSIONS = {".mp3", ".ogg", ".m4a", ".wav"}
+_PLANETE_RAP_MIN_DURATION_SECONDS = 5 * 60
+_PLANETE_RAP_CHANCE = 0.25
+_PLANETE_RAP_STICKER_IDS = [
+    "CAACAgQAAxkBAAII1mm28mt29wOs5D-tjDr4Uq4SJjD-AAJLEwACbykpUbtS94QKTr4uOgQ",
+    "CAACAgQAAxkBAAII12m28nD1h_j-c2qXn9H9qPFg2WJHAAInEwACQDX5U1RlrIugctdyOgQ",
+    "CAACAgQAAxkBAAII2Gm28nkGlLXyT9yGf653UyYjQorbAAL8FAACNHMpU3TZfj1KkDwtOgQ",
+    "CAACAgQAAxkBAAII32m28z34F-YAAWVnzTy--0Gjx0dfugACBQIAAtlWtBhl22rMoVsO2ToE",
+]
+_PLANETE_RAP_DOUBLE_STICKER_TRIGGER_ID = "CAACAgQAAxkBAAII32m28z34F-YAAWVnzTy--0Gjx0dfugACBQIAAtlWtBhl22rMoVsO2ToE"
+_PLANETE_RAP_DOUBLE_STICKER_FOLLOWUP_ID = "CAACAgQAAxkBAAII4Gm28z562JUUkSNXsvMORVTz3siVAAIGAgAC2Va0GDCs1_RXiBLVOgQ"
+_PLANETE_RAP_TEXT = "Ptain vlà planète rap qui débarque..."
+_PLANETE_RAP_COOLDOWN = timedelta(hours=6)
+_planete_rap_last_sent_at: datetime | None = None
+_planete_rap_pending = False
+_planete_rap_lock = asyncio.Lock()
 
 
 @router.message(F.text.func(lambda value: bool(value and SHALOM_RE.search(value))))
@@ -98,6 +116,85 @@ async def on_shalom(message: Message) -> None:
         audio=FSInputFile(_SHALOM_DIR / f"shabbat{song}.mp3"),
         disable_notification=True,
     )
+
+
+@router.message(F.text.func(lambda value: bool(value and JEW_AUDIO_TRIGGER_RE.search(value))))
+async def on_jew_audio_trigger(message: Message) -> None:
+    if random.random() >= 0.25:
+        return
+
+    audio_candidates = [
+        file_path
+        for file_path in _JEW_DIR.iterdir()
+        if file_path.is_file() and file_path.suffix.lower() in _JEW_AUDIO_EXTENSIONS
+    ]
+    if not audio_candidates:
+        logger.warning("No jew audio files found in %s", _JEW_DIR)
+        return
+
+    await message.reply_audio(
+        audio=FSInputFile(random.choice(audio_candidates)),
+        disable_notification=True,
+    )
+
+
+async def _reserve_planete_rap_slot(now: datetime) -> bool:
+    global _planete_rap_pending
+    async with _planete_rap_lock:
+        if _planete_rap_pending:
+            return False
+        if _planete_rap_last_sent_at and now - _planete_rap_last_sent_at < _PLANETE_RAP_COOLDOWN:
+            return False
+        _planete_rap_pending = True
+        return True
+
+
+async def _release_planete_rap_slot(*, sent: bool) -> None:
+    global _planete_rap_last_sent_at, _planete_rap_pending
+    async with _planete_rap_lock:
+        if sent:
+            _planete_rap_last_sent_at = datetime.utcnow()
+        _planete_rap_pending = False
+
+
+@router.message(F.audio)
+@router.message(F.voice)
+async def on_long_audio_planete_rap(message: Message) -> None:
+    duration = 0
+    if message.audio:
+        duration = message.audio.duration or 0
+    elif message.voice:
+        duration = message.voice.duration or 0
+
+    if duration < _PLANETE_RAP_MIN_DURATION_SECONDS:
+        return
+    if random.random() >= _PLANETE_RAP_CHANCE:
+        return
+
+    now = datetime.utcnow()
+    if not await _reserve_planete_rap_slot(now):
+        return
+
+    sent = False
+    try:
+        if random.randint(0, len(_PLANETE_RAP_STICKER_IDS)) < len(_PLANETE_RAP_STICKER_IDS):
+            selected_sticker = random.choice(_PLANETE_RAP_STICKER_IDS)
+            await message.reply_sticker(
+                sticker=selected_sticker,
+                disable_notification=True,
+            )
+            if selected_sticker == _PLANETE_RAP_DOUBLE_STICKER_TRIGGER_ID:
+                await message.answer_sticker(
+                    sticker=_PLANETE_RAP_DOUBLE_STICKER_FOLLOWUP_ID,
+                    disable_notification=True,
+                )
+            sent = True
+            return
+
+        await message.reply(_PLANETE_RAP_TEXT, disable_notification=True)
+        sent = True
+    finally:
+        await _release_planete_rap_slot(sent=sent)
 
 
 @router.message(F.location)

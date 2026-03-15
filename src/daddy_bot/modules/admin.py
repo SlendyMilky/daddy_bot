@@ -1,8 +1,9 @@
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import ChatMemberUpdated, Message
 
@@ -22,6 +23,7 @@ _CHAT_TYPE_ICON = {
 }
 
 _ACTIVE_STATUSES = {"member", "administrator", "creator"}
+_TRACKED_GROUP_TYPES = {"group", "supergroup"}
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +45,21 @@ def _save_registry(registry: dict[str, dict]) -> None:
         _DATA_PATH.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as exc:
         logger.warning("Could not save chat registry: %s", exc)
+
+
+def _upsert_chat_entry(registry: dict[str, dict], message: Message) -> bool:
+    chat = message.chat
+    chat_id = str(chat.id)
+    entry = {
+        "id": chat.id,
+        "type": chat.type,
+        "title": chat.title or chat.full_name or str(chat.id),
+        "username": chat.username,
+        "last_seen_at": datetime.utcnow().isoformat(timespec="seconds"),
+    }
+    changed = registry.get(chat_id) != entry
+    registry[chat_id] = entry
+    return changed
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +86,13 @@ async def on_my_chat_member(update: ChatMemberUpdated) -> None:
     _save_registry(registry)
 
 
+@router.message(F.chat.type.in_(_TRACKED_GROUP_TYPES))
+async def on_group_interaction(message: Message) -> None:
+    registry = _load_registry()
+    if _upsert_chat_entry(registry, message):
+        _save_registry(registry)
+
+
 # ---------------------------------------------------------------------------
 # /server command (owner only)
 # ---------------------------------------------------------------------------
@@ -86,7 +110,7 @@ async def on_server(message: Message) -> None:
     registry = _load_registry()
     if not registry:
         await message.reply(
-            "Aucun chat enregistré. Le bot trackera automatiquement les prochaines entrées.",
+            "Aucun groupe enregistré. Le bot ajoutera automatiquement les groupes où il y a des interactions.",
             parse_mode="HTML",
             disable_notification=True,
         )
