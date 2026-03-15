@@ -3,7 +3,7 @@ import re
 # Auto triggers
 ERIKA_RE = re.compile(r"(erika|Erika)")
 SHALOM_RE = re.compile(r"shalom", re.IGNORECASE)
-JEW_AUDIO_TRIGGER_RE = re.compile(r"\b(juif|israel)\b", re.IGNORECASE)
+JEW_AUDIO_TRIGGER_RE = re.compile(r"\b(juif|israel|jew)\b", re.IGNORECASE)
 QUOI_RE = re.compile(r"\bquoi\s*[.?!]?\s*$", re.IGNORECASE)
 PEUR_RE = re.compile(r"\bpeur\.?$", re.IGNORECASE)
 WOMEN_RE = re.compile(r"women(?:\.|@daddy_v2_bot)?", re.IGNORECASE)

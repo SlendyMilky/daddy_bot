@@ -120,7 +120,7 @@ async def on_shalom(message: Message) -> None:
 
 @router.message(F.text.func(lambda value: bool(value and JEW_AUDIO_TRIGGER_RE.search(value))))
 async def on_jew_audio_trigger(message: Message) -> None:
-    if random.random() >= 0.25:
+    if random.random() >= 0.0025:
         return
 
     audio_candidates = [
