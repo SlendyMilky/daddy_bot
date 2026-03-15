@@ -10,6 +10,7 @@ Daddy is a modular Telegram bot migrated from n8n to Python.
 3. Copy `.env.example` to `.env` and set at least:
    - `TELEGRAM_BOT_TOKEN`
    - `OPENAI_API_KEY` (optional for `/start`)
+   - `GOOGLE_MAPS_API_KEY` (required for `/bibine <lieu>` place search)
 4. Run:
    - `python -m daddy_bot.main`
 
@@ -37,5 +38,6 @@ Daddy is a modular Telegram bot migrated from n8n to Python.
 - Run `/unlock` and verify stub response.
 - Run `/nineball` and verify random answer.
 - Run `/bibine` twice and verify subscribe/unsubscribe responses.
+- Run `/bibine L'imprevu` and verify place proposal + map location; add a second place to verify location poll creation.
 - Verify bibine reminder is posted once per week at random time (Thu 15-22 or Fri 09-17).
 - Spam quickly to trigger rate limit cooldown message.

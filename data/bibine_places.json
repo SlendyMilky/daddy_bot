@@ -1,0 +1,18 @@
+{
+  "345019097:2026-03-20": {
+    "chat_id": 345019097,
+    "week_iso": "2026-03-20",
+    "proposals": [
+      {
+        "query": "L'impérvu",
+        "name": "À L'IMPREVU",
+        "address": "Av. de la Gare 5, 1814 La Tour-de-Peilz, Suisse",
+        "lat": 46.4550588,
+        "lon": 6.858803399999999,
+        "proposed_by": 345019097,
+        "proposed_label": "@Slendy_Milky"
+      }
+    ],
+    "poll_message_id": 2221
+  }
+}

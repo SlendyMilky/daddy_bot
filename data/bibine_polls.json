@@ -18,5 +18,31 @@
         "label": "@Slendy_Milky"
       }
     ]
+  },
+  "345019097:2214": {
+    "mentions_html": "<a href=\"tg://user?id=345019097\">@Slendy_Milky</a>",
+    "yes_votes": [
+      {
+        "user_id": 345019097,
+        "label": "@Slendy_Milky"
+      }
+    ],
+    "no_votes": []
+  },
+  "345019097:2221": {
+    "type": "place",
+    "week_iso": "2026-03-20",
+    "proposals": [
+      {
+        "query": "L'impérvu",
+        "name": "À L'IMPREVU",
+        "address": "Av. de la Gare 5, 1814 La Tour-de-Peilz, Suisse",
+        "lat": 46.4550588,
+        "lon": 6.858803399999999,
+        "proposed_by": 345019097,
+        "proposed_label": "@Slendy_Milky"
+      }
+    ],
+    "votes": []
   }
 }
