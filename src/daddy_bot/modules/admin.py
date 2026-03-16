@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command
 from aiogram.types import ChatMemberUpdated, Message
 
@@ -91,6 +92,8 @@ async def on_group_interaction(message: Message) -> None:
     registry = _load_registry()
     if _upsert_chat_entry(registry, message):
         _save_registry(registry)
+    # Keep this tracker non-blocking so other group handlers can run.
+    raise SkipHandler()
 
 
 # ---------------------------------------------------------------------------
