@@ -158,7 +158,7 @@ def _detect_ext(raw: bytes, fallback: str) -> str:
     return fallback
 
 
-_RESUME_MODEL = "gpt-5-mini"
+_RESUME_MODEL = "gpt-4o"
 _RESUME_AUDIO_SYSTEM = (
     "Tu dois résumer en français le message que tu reçois, "
     "ce message est une transcription audio."
