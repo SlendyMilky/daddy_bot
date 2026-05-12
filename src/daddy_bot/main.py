@@ -13,6 +13,7 @@ from daddy_bot.core.logging import setup_logging
 from daddy_bot.core.rate_limit import RateLimitMiddleware, SlidingWindowRateLimiter
 from daddy_bot.core.router_registry import register_routers
 from daddy_bot.modules.bibine import run_bibine_scheduler
+from daddy_bot.modules.princesse_morning import run_princesse_morning_scheduler
 
 
 async def start_bot() -> None:
@@ -43,12 +44,16 @@ async def start_bot() -> None:
 
     logger.info("Daddy bot started.")
     scheduler_task = asyncio.create_task(run_bibine_scheduler(bot))
+    princesse_scheduler_task = asyncio.create_task(run_princesse_morning_scheduler(bot))
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         scheduler_task.cancel()
+        princesse_scheduler_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await scheduler_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await princesse_scheduler_task
 
 
 def run() -> None:

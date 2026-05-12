@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     bibine_channel_id: int | None = Field(default=None, alias="BIBINE_CHANNEL_ID")
     bibine_timezone: str = Field(default="Europe/Paris", alias="BIBINE_TIMEZONE")
 
+    princesse_morning_enabled: bool = Field(default=True, alias="PRINCESSE_MORNING_ENABLED")
+    princesse_morning_timezone: str = Field(default="Europe/Paris", alias="PRINCESSE_MORNING_TIMEZONE")
+    princesse_morning_hour: int = Field(default=8, ge=0, le=23, alias="PRINCESSE_MORNING_HOUR")
+    princesse_morning_minute: int = Field(default=0, ge=0, le=59, alias="PRINCESSE_MORNING_MINUTE")
+
     def owner_id_set(self) -> set[int]:
         if not self.owner_ids:
             return set()
