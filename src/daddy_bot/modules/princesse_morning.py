@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiogram import Bot, F, Router
-from aiogram.enums import ChatAction
+from aiogram.enums import ChatAction, ChatType
 from aiogram.filters import Command
 from aiogram.filters.command import CommandObject
 from aiogram.types import FSInputFile, Message
@@ -186,11 +186,34 @@ async def run_princesse_morning_ritual(bot: Bot, chat_id: int, member: PoolMembe
     )
 
 
-def _next_trigger_datetime(now: datetime, trigger_time: time) -> datetime:
-    candidate = datetime.combine(now.date(), trigger_time, tzinfo=now.tzinfo)
-    if now >= candidate:
-        candidate = datetime.combine(now.date() + timedelta(days=1), trigger_time, tzinfo=now.tzinfo)
-    return candidate
+def _morning_window_for_date(
+    d: datetime.date,
+    tz: ZoneInfo,
+    start_hour: int,
+    end_hour: int,
+) -> tuple[datetime, datetime]:
+    """Return [win_start, win_end) in local time; end_hour is exclusive (e.g. 6 and 10 → 06:00–10:00)."""
+    win_start = datetime.combine(d, time(start_hour, 0, 0), tzinfo=tz)
+    win_end = datetime.combine(d, time(end_hour, 0, 0), tzinfo=tz)
+    return win_start, win_end
+
+
+def _seconds_until_tomorrow_early(now: datetime, tz: ZoneInfo) -> float:
+    wake = datetime.combine(now.date() + timedelta(days=1), time(0, 5, 0), tzinfo=tz)
+    return max(60.0, (wake - now).total_seconds())
+
+
+def _seconds_until_monday_early(now: datetime, tz: ZoneInfo) -> float:
+    """Next Monday 00:05 local (used to skip Saturday/Sunday)."""
+    wd = now.weekday()
+    try:
+        days_to_monday = {5: 2, 6: 1}[wd]
+    except KeyError:
+        logger.warning("Princesse morning: _seconds_until_monday_early called on weekday %s", wd)
+        return 3600.0
+    monday_date = now.date() + timedelta(days=days_to_monday)
+    wake = datetime.combine(monday_date, time(0, 5, 0), tzinfo=tz)
+    return max(60.0, (wake - now).total_seconds())
 
 
 async def run_princesse_morning_scheduler(bot: Bot) -> None:
@@ -208,24 +231,83 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
         )
         tz = ZoneInfo("Europe/Paris")
 
-    trigger_time = time(
-        hour=settings.princesse_morning_hour,
-        minute=settings.princesse_morning_minute,
-    )
+    start_h = settings.princesse_morning_start_hour
+    end_h = settings.princesse_morning_end_hour
     logger.info(
-        "Princesse morning scheduler enabled at %s %s (voice dir=%s).",
-        trigger_time.isoformat(timespec="minutes"),
+        "Princesse morning scheduler enabled, window [%02d:00, %02d:00) %s, Mon–Fri only (voice dir=%s).",
+        start_h,
+        end_h,
         tz.key,
         _PRINCESSE_DIR,
     )
 
     while True:
         now = datetime.now(tz=tz)
-        next_at = _next_trigger_datetime(now, trigger_time)
-        wait_seconds = max(1.0, (next_at - now).total_seconds())
-        await asyncio.sleep(wait_seconds)
+        if now.weekday() >= 5:
+            state = _load_state()
+            state.pop("scheduled_date", None)
+            state.pop("scheduled_at", None)
+            _save_state(state)
+            logger.info(
+                "Princesse morning: weekend (%s), sleeping until Monday 00:05.",
+                now.date().isoformat(),
+            )
+            await asyncio.sleep(_seconds_until_monday_early(now, tz))
+            continue
+
+        day_key = now.date().isoformat()
+        state = _load_state()
+
+        if state.get("last_sent_date") == day_key:
+            await asyncio.sleep(_seconds_until_tomorrow_early(now, tz))
+            continue
+
+        win_start, win_end = _morning_window_for_date(now.date(), tz, start_h, end_h)
+
+        if state.get("scheduled_date") != day_key:
+            if now >= win_end:
+                logger.info("Princesse morning: past window for %s, skipping until tomorrow.", day_key)
+                state["last_sent_date"] = day_key
+                state.pop("scheduled_date", None)
+                state.pop("scheduled_at", None)
+                _save_state(state)
+                await asyncio.sleep(_seconds_until_tomorrow_early(now, tz))
+                continue
+
+            if now < win_start:
+                effective_start = win_start
+            else:
+                effective_start = now
+
+            span_sec = int((win_end - effective_start).total_seconds())
+            if span_sec <= 0:
+                scheduled_at = now + timedelta(seconds=5)
+            else:
+                scheduled_at = effective_start + timedelta(seconds=random.randint(0, span_sec - 1))
+
+            state["scheduled_date"] = day_key
+            state["scheduled_at"] = scheduled_at.isoformat()
+            _save_state(state)
+            logger.info("Princesse morning scheduled for %s at %s.", day_key, scheduled_at.isoformat())
+
+        scheduled_at = datetime.fromisoformat(state["scheduled_at"])
+        wait_seconds = max(0.0, (scheduled_at - datetime.now(tz=tz)).total_seconds())
+        if wait_seconds > 0:
+            await asyncio.sleep(wait_seconds)
 
         now = datetime.now(tz=tz)
+        if now.weekday() >= 5:
+            state = _load_state()
+            state.pop("scheduled_date", None)
+            state.pop("scheduled_at", None)
+            _save_state(state)
+            logger.info(
+                "Princesse morning: landed on weekend after wait (%s), sleeping until Monday.",
+                now.date().isoformat(),
+            )
+            await asyncio.sleep(_seconds_until_monday_early(now, tz))
+            continue
+
         day_key = now.date().isoformat()
         state = _load_state()
         if state.get("last_sent_date") == day_key:
@@ -236,6 +318,8 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
         if not chats_with_pool:
             logger.info("Princesse morning: no pool members for configured chats, skipping %s.", day_key)
             state["last_sent_date"] = day_key
+            state.pop("scheduled_date", None)
+            state.pop("scheduled_at", None)
             _save_state(state)
             continue
 
@@ -243,6 +327,8 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
         if not voices:
             logger.warning("Princesse morning: no .ogg voice files in %s, skipping %s.", _PRINCESSE_DIR, day_key)
             state["last_sent_date"] = day_key
+            state.pop("scheduled_date", None)
+            state.pop("scheduled_at", None)
             _save_state(state)
             continue
 
@@ -254,6 +340,8 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
         try:
             await run_princesse_morning_ritual(bot, chat_id, member, voice_path)
             state["last_sent_date"] = day_key
+            state.pop("scheduled_date", None)
+            state.pop("scheduled_at", None)
             _save_state(state)
             logger.info(
                 "Princesse morning sent for %s chat=%s user=%s file=%s",
@@ -264,6 +352,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
             )
         except Exception as exc:
             logger.exception("Princesse morning failed: %s", exc)
+            await asyncio.sleep(120)
 
 
 @router.message(Command("princesse_pool"))
@@ -410,34 +499,29 @@ async def on_princesse_morning_test(message: Message) -> None:
     if not message.from_user or not _is_owner(message.from_user.id):
         await message.reply("⛔ Accès non autorisé.", parse_mode="HTML", disable_notification=True)
         return
-    if not _require_princesse_chat(message):
+    if message.chat.type != ChatType.PRIVATE:
         await message.reply(
-            "À utiliser dans un des groupes princesse matin.",
+            "Cette commande ne fonctionne qu’en <b>message privé</b> avec le bot.",
             parse_mode="HTML",
             disable_notification=True,
         )
         return
 
-    targets = _load_targets()
-    pool = targets.get(message.chat.id, [])
-    if not pool:
-        await message.reply(
-            "Pool vide : personne n’a encore parlé ici (hors commande) depuis le déploiement, "
-            "ou le pool a été vidé.",
-            parse_mode="HTML",
-            disable_notification=True,
-        )
-        return
     voices = _voice_candidates()
     if not voices:
         await message.reply(f"Aucun vocal dans {_PRINCESSE_DIR}", parse_mode="HTML", disable_notification=True)
         return
 
-    member = random.choice(pool)
+    u = message.from_user
+    member = PoolMember(
+        user_id=u.id,
+        first_name=u.first_name or "Copain",
+        username=u.username,
+    )
     voice_path = random.choice(voices)
     try:
         await run_princesse_morning_ritual(message.bot, message.chat.id, member, voice_path)
-        await message.reply("Test envoyé. ✅", parse_mode="HTML", disable_notification=True)
+        await message.reply("Test terminé (ping + vocal sur toi). ✅", parse_mode="HTML", disable_notification=True)
     except Exception as exc:
         logger.exception("princesse_morning_test failed: %s", exc)
         await message.reply("Erreur à l'envoi.", parse_mode="HTML", disable_notification=True)

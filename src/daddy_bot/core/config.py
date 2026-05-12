@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,8 +26,17 @@ class Settings(BaseSettings):
 
     princesse_morning_enabled: bool = Field(default=True, alias="PRINCESSE_MORNING_ENABLED")
     princesse_morning_timezone: str = Field(default="Europe/Paris", alias="PRINCESSE_MORNING_TIMEZONE")
-    princesse_morning_hour: int = Field(default=8, ge=0, le=23, alias="PRINCESSE_MORNING_HOUR")
-    princesse_morning_minute: int = Field(default=0, ge=0, le=59, alias="PRINCESSE_MORNING_MINUTE")
+    princesse_morning_start_hour: int = Field(default=6, ge=0, le=23, alias="PRINCESSE_MORNING_START_HOUR")
+    princesse_morning_end_hour: int = Field(default=10, ge=1, le=23, alias="PRINCESSE_MORNING_END_HOUR")
+
+    @model_validator(mode="after")
+    def _princesse_morning_window(self) -> "Settings":
+        if self.princesse_morning_end_hour <= self.princesse_morning_start_hour:
+            raise ValueError(
+                "PRINCESSE_MORNING_END_HOUR must be greater than PRINCESSE_MORNING_START_HOUR "
+                "(morning window is [start, end) in local time, e.g. 6 and 10 for 06:00–10:00)."
+            )
+        return self
 
     def owner_id_set(self) -> set[int]:
         if not self.owner_ids:
