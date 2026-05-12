@@ -527,8 +527,10 @@ async def on_princesse_morning_test(message: Message) -> None:
         await message.reply("Erreur à l'envoi.", parse_mode="HTML", disable_notification=True)
 
 
-@router.message(F.chat.id.in_(_CHAT_IDS), ~Command())
+@router.message(F.chat.id.in_(_CHAT_IDS))
 async def on_autopool_activity(message: Message) -> None:
+    if (message.text or "").startswith("/"):
+        return
     if not message.from_user or message.from_user.is_bot:
         return
     targets = _load_targets()
