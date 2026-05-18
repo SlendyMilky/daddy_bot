@@ -8,8 +8,9 @@ per-chat queue and receives messages in real time.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections import defaultdict, deque
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 _BUFFER_SIZE = 50  # Recent messages kept per chat (in-memory only)
 
@@ -32,18 +33,14 @@ class MessageHub:
         return q
 
     def unsubscribe(self, chat_id: int, q: asyncio.Queue[dict | None]) -> None:
-        try:
+        with contextlib.suppress(ValueError):
             self._subs[chat_id].remove(q)
-        except ValueError:
-            pass
 
     async def publish(self, chat_id: int, msg: dict) -> None:
         self._buffer[chat_id].append(msg)
         for q in list(self._subs.get(chat_id, [])):
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(msg)
-            except asyncio.QueueFull:
-                pass
 
     async def iter_messages(
         self,

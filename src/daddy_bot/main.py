@@ -4,9 +4,10 @@ import asyncio
 import contextlib
 import logging
 import signal
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import uvicorn
 from aiogram import Bot, Dispatcher
