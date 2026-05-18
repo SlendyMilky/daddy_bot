@@ -8,7 +8,7 @@ import httpx
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Message
 from openai import AsyncOpenAI
 
 from daddy_bot.core.config import get_settings
@@ -112,7 +112,7 @@ async def on_think(message: Message) -> None:
         await message.reply(
             text,
             parse_mode="HTML",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
             disable_notification=True,
         )
     except Exception as exc:

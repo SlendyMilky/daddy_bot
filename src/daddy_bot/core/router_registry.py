@@ -1,5 +1,4 @@
 from aiogram import Dispatcher
-from aiogram.enums import UpdateType
 
 from daddy_bot.modules.admin import router as admin_router
 from daddy_bot.modules.auto_triggers import router as auto_triggers_router

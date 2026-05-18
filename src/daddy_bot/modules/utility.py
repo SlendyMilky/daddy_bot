@@ -17,6 +17,7 @@ from aiogram.types import (
     ForceReply,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    LinkPreviewOptions,
     Message,
     ReplyParameters,
 )
@@ -36,7 +37,8 @@ def _full_text(message: Message) -> str:
 
 async def _send_stub(message: Message, module_name: str) -> None:
     await message.answer(
-        f"Le module `{module_name}` est en cours de migration depuis n8n.",
+        f"Le module <code>{html.escape(module_name)}</code> est en cours de migration depuis n8n.",
+        parse_mode="HTML",
         disable_notification=True,
     )
 
@@ -59,7 +61,7 @@ async def on_unlock(message: Message) -> None:
 
     if replied.photo:
         photo = max(replied.photo, key=lambda p: p.width * p.height)
-        caption = (replied.caption or "") + _UNLOCK_SUFFIX
+        caption = html.escape(replied.caption or "") + _UNLOCK_SUFFIX
         await message.answer_photo(
             photo=photo.file_id,
             caption=caption,
@@ -67,7 +69,7 @@ async def on_unlock(message: Message) -> None:
             reply_parameters=reply_params,
         )
     elif replied.video:
-        caption = (replied.caption or "") + _UNLOCK_SUFFIX
+        caption = html.escape(replied.caption or "") + _UNLOCK_SUFFIX
         await message.answer_video(
             video=replied.video.file_id,
             caption=caption,
@@ -75,7 +77,7 @@ async def on_unlock(message: Message) -> None:
             reply_parameters=reply_params,
         )
     elif replied.document:
-        caption = (replied.caption or "") + _UNLOCK_SUFFIX
+        caption = html.escape(replied.caption or "") + _UNLOCK_SUFFIX
         await message.answer_document(
             document=replied.document.file_id,
             caption=caption,
@@ -84,7 +86,7 @@ async def on_unlock(message: Message) -> None:
         )
     elif replied.text:
         await message.answer(
-            replied.text + _UNLOCK_SUFFIX,
+            html.escape(replied.text) + _UNLOCK_SUFFIX,
             parse_mode="HTML",
             reply_parameters=reply_params,
         )
@@ -492,7 +494,7 @@ async def on_resume(message: Message) -> None:
         await status_msg.edit_text(
             summary + "\n\n" + " | ".join(footer_parts),
             parse_mode="HTML",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception as exc:
         logger.exception("resume URL failed: %s", exc)
@@ -622,6 +624,7 @@ async def on_t2i_reply_chain(message: Message) -> None:
         await status_msg.edit_text("Erreur lors de la génération de l'image.", parse_mode="HTML")
 
 
+@router.message(Command("t2s"))
 @router.message(
     F.func(lambda message: isinstance(message, Message) and bool(T2S_RE.search(_full_text(message))))
 )
@@ -633,7 +636,8 @@ async def on_t2s_message(message: Message) -> None:
 async def on_t2s_callback(callback: CallbackQuery) -> None:
     if callback.message:
         await callback.message.answer(
-            "Le module `t2s` est en cours de migration depuis n8n.",
+            "Le module <code>t2s</code> est en cours de migration depuis n8n.",
+            parse_mode="HTML",
             disable_notification=True,
         )
     await callback.answer()

@@ -3,6 +3,7 @@ import logging
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 from aiogram import F, Router
@@ -56,6 +57,7 @@ async def on_erika(message: Message) -> None:
 
 
 _SHALOM_DIR = Path(__file__).parents[3] / "assets" / "shalom"
+_PARIS_TZ = ZoneInfo("Europe/Paris")
 _JEW_DIR = Path(__file__).parents[3] / "assets" / "jew"
 _JEW_AUDIO_EXTENSIONS = {".mp3", ".ogg", ".m4a", ".wav"}
 _PLANETE_RAP_MIN_DURATION_SECONDS = 5 * 60
@@ -77,7 +79,7 @@ _planete_rap_lock = asyncio.Lock()
 
 @router.message(F.text.func(lambda value: bool(value and SHALOM_RE.search(value))))
 async def on_shalom(message: Message) -> None:
-    is_friday = datetime.now().weekday() == 4  # Monday=0, Friday=4
+    is_friday = datetime.now(tz=_PARIS_TZ).weekday() == 4  # Monday=0, Friday=4
 
     await message.reply(
         "Shalom mon frère ✡️",
@@ -112,10 +114,14 @@ async def on_shalom(message: Message) -> None:
     )
 
     song = random.randint(0, 1)
-    await message.answer_audio(
-        audio=FSInputFile(_SHALOM_DIR / f"shabbat{song}.mp3"),
-        disable_notification=True,
-    )
+    shabbat_audio = _SHALOM_DIR / f"shabbat{song}.mp3"
+    if shabbat_audio.is_file():
+        await message.answer_audio(
+            audio=FSInputFile(shabbat_audio),
+            disable_notification=True,
+        )
+    else:
+        logger.warning("Shabbat audio missing: %s", shabbat_audio)
 
 
 @router.message(F.text.func(lambda value: bool(value and JEW_AUDIO_TRIGGER_RE.search(value))))
@@ -544,7 +550,7 @@ async def on_heure_sticker(message: Message) -> None:
 
 @router.callback_query(F.data == "timenowplease")
 async def on_heure_callback(callback: CallbackQuery) -> None:
-    now = datetime.now().strftime("%H:%M:%S")
+    now = datetime.now(tz=_PARIS_TZ).strftime("%H:%M:%S")
     username = callback.from_user.username if callback.from_user else "?"
     await callback.answer(text=f"Il est {now} @{username} 😐", show_alert=False)
 

@@ -31,6 +31,8 @@ _VIDEO_EXTENSIONS = {".mp4"}
 _AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".flac"}
 _VOICE_EXTENSIONS = {".ogg"}
 
+_registry_cache: dict[str, dict] | None = None
+
 
 # ---------------------------------------------------------------------------
 # Persistence helpers
@@ -51,6 +53,13 @@ def _save_registry(registry: dict[str, dict]) -> None:
         _DATA_PATH.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as exc:
         logger.warning("Could not save chat registry: %s", exc)
+
+
+def _get_registry() -> dict[str, dict]:
+    global _registry_cache
+    if _registry_cache is None:
+        _registry_cache = _load_registry()
+    return _registry_cache
 
 
 def _upsert_chat_entry(registry: dict[str, dict], message: Message) -> bool:
@@ -74,7 +83,7 @@ def _upsert_chat_entry(registry: dict[str, dict], message: Message) -> bool:
 
 @router.my_chat_member()
 async def on_my_chat_member(update: ChatMemberUpdated) -> None:
-    registry = _load_registry()
+    registry = _get_registry()
     chat_id = str(update.chat.id)
 
     if update.new_chat_member.status in _ACTIVE_STATUSES:
@@ -94,7 +103,7 @@ async def on_my_chat_member(update: ChatMemberUpdated) -> None:
 
 @router.message(F.chat.type.in_(_TRACKED_GROUP_TYPES))
 async def on_group_interaction(message: Message) -> None:
-    registry = _load_registry()
+    registry = _get_registry()
     if _upsert_chat_entry(registry, message):
         _save_registry(registry)
     # Keep this tracker non-blocking so other group handlers can run.
@@ -115,7 +124,7 @@ async def on_server(message: Message) -> None:
         await message.reply("⛔ Accès non autorisé.", parse_mode="HTML")
         return
 
-    registry = _load_registry()
+    registry = _get_registry()
     if not registry:
         await message.reply(
             "Aucun groupe enregistré. Le bot ajoutera automatiquement les groupes où il y a des interactions.",
