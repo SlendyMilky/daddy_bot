@@ -119,7 +119,7 @@ class TelegramOIDCClient:
             "response_type": "code",
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
-            "scope": "openid",
+            "scope": "openid profile",
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
@@ -131,15 +131,17 @@ class TelegramOIDCClient:
         meta = await self._load_metadata()
         token_endpoint = meta["token_endpoint"]
 
+        # Telegram requires HTTP Basic auth: base64(client_id:client_secret)
+        basic_creds = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
                 token_endpoint,
+                headers={"Authorization": f"Basic {basic_creds}"},
                 data={
                     "grant_type": "authorization_code",
                     "code": code,
                     "redirect_uri": self.redirect_uri,
                     "client_id": self.client_id,
-                    "client_secret": self.client_secret,
                     "code_verifier": code_verifier,
                 },
             )
