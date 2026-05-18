@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import html
-import json
 import logging
 import random
-from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -17,28 +14,18 @@ from aiogram.filters.command import CommandObject
 from aiogram.types import FSInputFile, Message
 
 from daddy_bot.core.config import get_settings
+from daddy_bot.db.repositories import princesse_repo
+from daddy_bot.db.repositories.princesse_repo import PoolMember
 
 logger = logging.getLogger(__name__)
 router = Router(name="princesse_morning")
 
 _PRINCESSE_DIR = Path(__file__).parents[3] / "assets" / "princesse"
-_TARGETS_PATH = Path(__file__).parents[3] / "data" / "princesse_morning_targets.json"
-_STATE_PATH = Path(__file__).parents[3] / "data" / "princesse_morning_state.json"
-
-_CHAT_IDS: tuple[int, ...] = (-1001153426467, -1001805681499)
 _CHAT_ACTION_REFRESH_SECONDS = 4
 
 
-@dataclass(slots=True)
-class PoolMember:
-    user_id: int
-    first_name: str
-    username: str | None
-
-    @property
-    def mention_html(self) -> str:
-        label = f"@{self.username}" if self.username else self.first_name
-        return f'<a href="tg://user?id={self.user_id}">{html.escape(label)}</a>'
+def _chat_ids() -> tuple[int, ...]:
+    return get_settings().princesse_morning_chat_id_tuple()
 
 
 def _is_owner(user_id: int) -> bool:
@@ -46,98 +33,40 @@ def _is_owner(user_id: int) -> bool:
     return not owners or user_id in owners
 
 
-def _load_targets() -> dict[int, list[PoolMember]]:
-    if not _TARGETS_PATH.exists():
-        return {cid: [] for cid in _CHAT_IDS}
-    try:
-        raw = json.loads(_TARGETS_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Could not read princesse morning targets: %s", exc)
-        return {cid: [] for cid in _CHAT_IDS}
-
-    out: dict[int, list[PoolMember]] = {cid: [] for cid in _CHAT_IDS}
-    if not isinstance(raw, dict):
-        return out
-
-    for key, members_raw in raw.items():
-        try:
-            chat_id = int(key)
-        except (TypeError, ValueError):
-            continue
-        if chat_id not in out:
-            out[chat_id] = []
-        if not isinstance(members_raw, list):
-            continue
-        for item in members_raw:
-            if not isinstance(item, dict):
-                continue
-            try:
-                uid = int(item["user_id"])
-            except Exception:
-                continue
-            out[chat_id].append(
-                PoolMember(
-                    user_id=uid,
-                    first_name=str(item.get("first_name") or "Copain"),
-                    username=(str(item["username"]) if item.get("username") else None),
-                )
-            )
-    return out
+async def _load_targets() -> dict[int, list[PoolMember]]:
+    return await princesse_repo.list_pools_for_chats(_chat_ids())
 
 
-def _save_targets(targets: dict[int, list[PoolMember]]) -> None:
-    try:
-        _TARGETS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        payload: dict[str, list[dict[str, object]]] = {}
-        for cid in sorted({*_CHAT_IDS, *targets.keys()}):
-            members = targets.get(cid, [])
-            payload[str(cid)] = [
-                {"user_id": m.user_id, "first_name": m.first_name, "username": m.username}
-                for m in sorted(members, key=lambda x: x.user_id)
-            ]
-        _TARGETS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save princesse morning targets: %s", exc)
-
-
-def _upsert_pool_member(targets: dict[int, list[PoolMember]], chat_id: int, user_id: int, first_name: str, username: str | None) -> bool:
-    """Returns True if the JSON file should be saved (new member or profile changed)."""
-    member = PoolMember(user_id=user_id, first_name=first_name or "Copain", username=username)
-    pool = targets.setdefault(chat_id, [])
-    for i, existing in enumerate(pool):
-        if existing.user_id != member.user_id:
-            continue
-        if existing.first_name != member.first_name or existing.username != member.username:
-            pool[i] = member
-            return True
-        return False
-    pool.append(member)
-    return True
+async def _save_targets(targets: dict[int, list[PoolMember]]) -> None:
+    """Reconcile DB pool state with the given in-memory dict."""
+    existing = await princesse_repo.list_pools_for_chats(tuple(targets.keys()))
+    for chat_id, members in targets.items():
+        existing_ids = {m.user_id for m in existing.get(chat_id, [])}
+        new_ids = {m.user_id for m in members}
+        for uid in existing_ids - new_ids:
+            await princesse_repo.remove_member(chat_id, uid)
+        for member in members:
+            await princesse_repo.upsert_member(chat_id, member)
 
 
 def _require_princesse_chat(message: Message) -> bool:
-    return message.chat.id in _CHAT_IDS
+    return message.chat.id in _chat_ids()
 
 
-def _load_state() -> dict[str, str]:
-    if not _STATE_PATH.exists():
-        return {}
-    try:
-        raw = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Could not read princesse morning state: %s", exc)
-        return {}
-    if not isinstance(raw, dict):
-        return {}
-    return {str(k): str(v) for k, v in raw.items() if v is not None}
+async def _load_state() -> dict[str, str]:
+    return await princesse_repo.all_state()
 
 
-def _save_state(state: dict[str, str]) -> None:
-    try:
-        _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save princesse morning state: %s", exc)
+async def _save_state(state: dict[str, str]) -> None:
+    """Reconcile DB state with the in-memory dict (full sync)."""
+    existing = await princesse_repo.all_state()
+    for key in set(existing.keys()) - set(state.keys()):
+        await princesse_repo.delete_state(key)
+    for k, v in state.items():
+        if v is None:
+            continue
+        if existing.get(k) != v:
+            await princesse_repo.set_state(k, v)
 
 
 def _voice_candidates() -> list[Path]:
@@ -184,6 +113,10 @@ async def run_princesse_morning_ritual(bot: Bot, chat_id: int, member: PoolMembe
         duration=int(round(duration)) if duration <= 300 else None,
         disable_notification=False,
     )
+    try:
+        await princesse_repo.record_send(chat_id=chat_id, user_id=member.user_id, voice_file=voice_path.name)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not record princesse history: %s", exc)
 
 
 def _morning_window_for_date(
@@ -244,10 +177,10 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
     while True:
         now = datetime.now(tz=tz)
         if now.weekday() >= 5:
-            state = _load_state()
+            state = await _load_state()
             state.pop("scheduled_date", None)
             state.pop("scheduled_at", None)
-            _save_state(state)
+            await _save_state(state)
             logger.info(
                 "Princesse morning: weekend (%s), sleeping until Monday 00:05.",
                 now.date().isoformat(),
@@ -256,7 +189,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
             continue
 
         day_key = now.date().isoformat()
-        state = _load_state()
+        state = await _load_state()
 
         if state.get("last_sent_date") == day_key:
             await asyncio.sleep(_seconds_until_tomorrow_early(now, tz))
@@ -270,7 +203,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
                 state["last_sent_date"] = day_key
                 state.pop("scheduled_date", None)
                 state.pop("scheduled_at", None)
-                _save_state(state)
+                await _save_state(state)
                 await asyncio.sleep(_seconds_until_tomorrow_early(now, tz))
                 continue
 
@@ -287,7 +220,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
 
             state["scheduled_date"] = day_key
             state["scheduled_at"] = scheduled_at.isoformat()
-            _save_state(state)
+            await _save_state(state)
             logger.info("Princesse morning scheduled for %s at %s.", day_key, scheduled_at.isoformat())
 
         scheduled_at = datetime.fromisoformat(state["scheduled_at"])
@@ -297,10 +230,10 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
 
         now = datetime.now(tz=tz)
         if now.weekday() >= 5:
-            state = _load_state()
+            state = await _load_state()
             state.pop("scheduled_date", None)
             state.pop("scheduled_at", None)
-            _save_state(state)
+            await _save_state(state)
             logger.info(
                 "Princesse morning: landed on weekend after wait (%s), sleeping until Monday.",
                 now.date().isoformat(),
@@ -309,18 +242,18 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
             continue
 
         day_key = now.date().isoformat()
-        state = _load_state()
+        state = await _load_state()
         if state.get("last_sent_date") == day_key:
             continue
 
-        targets = _load_targets()
-        chats_with_pool = [cid for cid in _CHAT_IDS if targets.get(cid)]
+        targets = await _load_targets()
+        chats_with_pool = [cid for cid in _chat_ids() if targets.get(cid)]
         if not chats_with_pool:
             logger.info("Princesse morning: no pool members for configured chats, skipping %s.", day_key)
             state["last_sent_date"] = day_key
             state.pop("scheduled_date", None)
             state.pop("scheduled_at", None)
-            _save_state(state)
+            await _save_state(state)
             continue
 
         voices = _voice_candidates()
@@ -329,7 +262,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
             state["last_sent_date"] = day_key
             state.pop("scheduled_date", None)
             state.pop("scheduled_at", None)
-            _save_state(state)
+            await _save_state(state)
             continue
 
         chat_id = random.choice(chats_with_pool)
@@ -342,7 +275,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
             state["last_sent_date"] = day_key
             state.pop("scheduled_date", None)
             state.pop("scheduled_at", None)
-            _save_state(state)
+            await _save_state(state)
             logger.info(
                 "Princesse morning sent for %s chat=%s user=%s file=%s",
                 day_key,
@@ -368,7 +301,7 @@ async def on_princesse_pool_list(message: Message) -> None:
         )
         return
 
-    pool = _load_targets().get(message.chat.id, [])
+    pool = (await _load_targets()).get(message.chat.id, [])
     if not pool:
         await message.reply(
             "Pool vide. Les humains du groupe sont ajoutés automatiquement quand ils envoient un message.",
@@ -417,9 +350,9 @@ async def on_princesse_pool_clear(message: Message, command: CommandObject) -> N
         )
         return
 
-    targets = _load_targets()
+    targets = await _load_targets()
     targets[message.chat.id] = []
-    _save_targets(targets)
+    await _save_targets(targets)
     await message.reply("Pool vidé pour ce groupe. ✅", parse_mode="HTML", disable_notification=True)
 
 
@@ -450,14 +383,14 @@ async def on_princesse_pool_remove_id(message: Message, command: CommandObject) 
         await message.reply("user_id invalide.", parse_mode="HTML", disable_notification=True)
         return
 
-    targets = _load_targets()
+    targets = await _load_targets()
     pool = targets.setdefault(message.chat.id, [])
     new_pool = [m for m in pool if m.user_id != uid]
     if len(new_pool) == len(pool):
         await message.reply("Cet id n’est pas dans le pool.", parse_mode="HTML", disable_notification=True)
         return
     targets[message.chat.id] = new_pool
-    _save_targets(targets)
+    await _save_targets(targets)
     await message.reply(f"Retiré : <code>{uid}</code> ✅", parse_mode="HTML", disable_notification=True)
 
 
@@ -483,14 +416,14 @@ async def on_princesse_pool_remove(message: Message) -> None:
         return
 
     uid = reply.from_user.id
-    targets = _load_targets()
+    targets = await _load_targets()
     pool = targets.setdefault(message.chat.id, [])
     new_pool = [m for m in pool if m.user_id != uid]
     if len(new_pool) == len(pool):
         await message.reply("Pas dans le pool.", parse_mode="HTML", disable_notification=True)
         return
     targets[message.chat.id] = new_pool
-    _save_targets(targets)
+    await _save_targets(targets)
     await message.reply("Retiré du pool. ✅", parse_mode="HTML", disable_notification=True)
 
 
@@ -527,19 +460,19 @@ async def on_princesse_morning_test(message: Message) -> None:
         await message.reply("Erreur à l'envoi.", parse_mode="HTML", disable_notification=True)
 
 
-@router.message(F.chat.id.in_(_CHAT_IDS))
+@router.message(F.chat.id.func(lambda cid: cid in _chat_ids()))
 async def on_autopool_activity(message: Message) -> None:
     if (message.text or "").startswith("/"):
         return
     if not message.from_user or message.from_user.is_bot:
         return
-    targets = _load_targets()
     u = message.from_user
-    if _upsert_pool_member(
-        targets,
+    await princesse_repo.upsert_member(
         message.chat.id,
-        u.id,
-        u.first_name or "Copain",
-        u.username,
-    ):
-        _save_targets(targets)
+        PoolMember(
+            user_id=u.id,
+            first_name=u.first_name or "Copain",
+            username=u.username,
+        ),
+    )
+

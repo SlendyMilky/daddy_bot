@@ -47,9 +47,7 @@ class RateLimitMiddleware(BaseMiddleware):
         data: dict,
     ):
         user_id = None
-        if isinstance(event, Message) and event.from_user:
-            user_id = event.from_user.id
-        elif isinstance(event, CallbackQuery) and event.from_user:
+        if isinstance(event, Message) and event.from_user or isinstance(event, CallbackQuery) and event.from_user:
             user_id = event.from_user.id
 
         if user_id is None or user_id in self.owner_ids:

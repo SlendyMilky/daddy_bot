@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Bibine{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Bibine</h1>
+
+<div class="flex gap-4 mb-8">
+  <form method="post" action="/admin/bibine/ping">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Trigger Ping Now</button>
+  </form>
+  <form method="post" action="/admin/bibine/reset_state">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            onclick="return confirm('Reset weekly state?')">Reset Weekly State</button>
+  </form>
+</div>
+
+<div class="bg-white shadow rounded-lg p-6 mb-8">
+  <h2 class="text-lg font-semibold text-gray-900 mb-4">Subscribers ({{ subscribers|length }})</h2>
+  {% if subscribers %}
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left">User ID</th>
+        <th class="px-4 py-2 text-left">Name</th>
+        <th class="px-4 py-2 text-left">Username</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for s in subscribers %}
+      <tr>
+        <td class="px-4 py-2"><a href="tg://user?id={{ s.user_id }}" class="text-indigo-600">{{ s.user_id }}</a></td>
+        <td class="px-4 py-2">{{ s.first_name }}</td>
+        <td class="px-4 py-2">{{ s.username or '—' }}</td>
+        <td class="px-4 py-2">
+          <form method="post" action="/admin/bibine/remove_subscriber">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="target_user_id" value="{{ s.user_id }}">
+            <button type="submit" class="text-red-600 hover:text-red-800 text-xs"
+                    onclick="return confirm('Remove subscriber {{ s.user_id }}?')">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-gray-500">No subscribers.</p>
+  {% endif %}
+</div>
+
+<div class="bg-white shadow rounded-lg p-6">
+  <h2 class="text-lg font-semibold text-gray-900 mb-4">Active Polls ({{ polls|length }})</h2>
+  {% if polls %}
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left">Chat ID</th>
+        <th class="px-4 py-2 text-left">Message ID</th>
+        <th class="px-4 py-2 text-left">Type</th>
+        <th class="px-4 py-2 text-left">Created</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for p in polls %}
+      <tr>
+        <td class="px-4 py-2">{{ p.chat_id }}</td>
+        <td class="px-4 py-2">{{ p.message_id }}</td>
+        <td class="px-4 py-2">{{ p.type }}</td>
+        <td class="px-4 py-2">{{ p.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-gray-500">No active polls.</p>
+  {% endif %}
+</div>
+{% endblock %}

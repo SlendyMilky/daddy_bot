@@ -11,10 +11,23 @@ dependencies = [
     "openai>=1.108.1",
     "trafilatura>=2.0.0",
     "mutagen>=1.47.0",
+    "aiosqlite>=0.20.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "jinja2>=3.1.0",
+    "itsdangerous>=2.2.0",
+    "python-multipart>=0.0.9",
+    "authlib>=1.3.0",
+    "cryptography>=42.0.0",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.3"]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
 
 [project.scripts]
 daddy-bot = "daddy_bot.main:run"
@@ -28,3 +41,38 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["daddy_bot*"]
+
+[tool.setuptools.package-data]
+daddy_bot = ["db/migrations/*.sql", "web/templates/**/*.html", "web/static/*.css"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",  # line length handled by formatter
+    "B008",  # function calls in argument defaults (FastAPI/aiogram pattern)
+    "UP007", # `X | Y` typing — allow Optional[X] when more explicit
+    "SIM117", # combined with-statements — readability sometimes worse
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict_optional = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["aiogram.*"]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

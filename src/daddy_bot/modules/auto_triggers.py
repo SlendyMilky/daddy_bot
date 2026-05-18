@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -20,8 +20,8 @@ from aiogram.types import (
 
 from daddy_bot.core.config import get_settings
 from daddy_bot.utils.patterns import (
-    ANTI_DPRK_INSULT_RE,
     ANTI_COMMUNISM_INSULT_RE,
+    ANTI_DPRK_INSULT_RE,
     BRICOLEUR_RE,
     COMMUNISM_RE,
     DPRK_RE,
@@ -159,7 +159,7 @@ async def _release_planete_rap_slot(*, sent: bool) -> None:
     global _planete_rap_last_sent_at, _planete_rap_pending
     async with _planete_rap_lock:
         if sent:
-            _planete_rap_last_sent_at = datetime.utcnow()
+            _planete_rap_last_sent_at = datetime.now(tz=UTC)
         _planete_rap_pending = False
 
 
@@ -177,7 +177,7 @@ async def on_long_audio_planete_rap(message: Message) -> None:
     if random.random() >= _PLANETE_RAP_CHANCE:
         return
 
-    now = datetime.utcnow()
+    now = datetime.now(tz=UTC)
     if not await _reserve_planete_rap_slot(now):
         return
 
@@ -218,7 +218,7 @@ async def on_location(message: Message) -> None:
 
     try:
         async with (
-            httpx.AsyncClient(timeout=10, verify=False) as rapidapi_client,
+            httpx.AsyncClient(timeout=10) as rapidapi_client,
             httpx.AsyncClient(timeout=10) as meteo_client,
         ):
             address_resp, meteo_resp = await asyncio.gather(
@@ -458,7 +458,7 @@ async def _release_maiscsupersa_slot(*, sent: bool) -> None:
     global _maiscsupersa_last_sent_at, _maiscsupersa_pending
     async with _maiscsupersa_lock:
         if sent:
-            _maiscsupersa_last_sent_at = datetime.utcnow()
+            _maiscsupersa_last_sent_at = datetime.now(tz=UTC)
         _maiscsupersa_pending = False
 
 
@@ -568,7 +568,11 @@ async def on_maiscsupersa_random_voice(message: Message) -> None:
     if user is None or user.is_bot:
         return
 
-    now = datetime.utcnow()
+    # Ignore command messages so they don't bump the streak or trigger the random voice.
+    if (message.text or "").startswith("/"):
+        return
+
+    now = datetime.now(tz=UTC)
     streak = _update_maiscsupersa_streak(user.id, now)
     multiplier = _maiscsupersa_multiplier(streak)
     chance = min(_MAISCSUPERSA_BASE_CHANCE * multiplier, _MAISCSUPERSA_MAX_CHANCE)

@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import html
-import json
 import logging
 import random
 from collections import Counter
-from dataclasses import dataclass
 from datetime import datetime, time, timedelta
-from pathlib import Path
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -19,88 +16,41 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from daddy_bot.core.config import get_settings
+from daddy_bot.db.repositories import bibine_repo
+from daddy_bot.db.repositories.bibine_repo import BibineSubscriber
+from daddy_bot.utils.mentions import mention_html as _mention_html
 
 logger = logging.getLogger(__name__)
 router = Router(name="bibine")
 
-_SUBSCRIBERS_PATH = Path(__file__).parents[3] / "data" / "bibine_subscribers.json"
-_STATE_PATH = Path(__file__).parents[3] / "data" / "bibine_state.json"
-_POLLS_PATH = Path(__file__).parents[3] / "data" / "bibine_polls.json"
-_PLACE_STATE_PATH = Path(__file__).parents[3] / "data" / "bibine_places.json"
+
+async def _load_subscribers() -> dict[int, BibineSubscriber]:
+    return {s.user_id: s for s in await bibine_repo.list_subscribers()}
 
 
-@dataclass(slots=True)
-class BibineSubscriber:
-    user_id: int
-    first_name: str
-    username: str | None
-
-    @property
-    def mention_html(self) -> str:
-        label = f"@{self.username}" if self.username else self.first_name
-        return f'<a href="tg://user?id={self.user_id}">{html.escape(label)}</a>'
+async def _save_subscribers(subscribers: dict[int, BibineSubscriber]) -> None:
+    """Reconcile DB with the in-memory dict (additions + removals)."""
+    existing = {s.user_id for s in await bibine_repo.list_subscribers()}
+    new_ids = set(subscribers.keys())
+    for uid in existing - new_ids:
+        await bibine_repo.remove_subscriber(uid)
+    for sub in subscribers.values():
+        await bibine_repo.add_subscriber(sub)
 
 
-def _load_subscribers() -> dict[int, BibineSubscriber]:
-    if not _SUBSCRIBERS_PATH.exists():
-        return {}
-    try:
-        raw = json.loads(_SUBSCRIBERS_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Could not read bibine subscribers: %s", exc)
-        return {}
+async def _load_state() -> dict[str, str]:
+    return await bibine_repo.all_state()
 
-    subscribers: dict[int, BibineSubscriber] = {}
-    if not isinstance(raw, list):
-        return subscribers
-    for item in raw:
-        try:
-            user_id = int(item["user_id"])
-        except Exception:
+
+async def _save_state(state: dict[str, str]) -> None:
+    existing = await bibine_repo.all_state()
+    for key in set(existing.keys()) - set(state.keys()):
+        await bibine_repo.delete_state(key)
+    for k, v in state.items():
+        if v is None:
             continue
-        subscribers[user_id] = BibineSubscriber(
-            user_id=user_id,
-            first_name=str(item.get("first_name") or "Copain"),
-            username=(str(item["username"]) if item.get("username") else None),
-        )
-    return subscribers
-
-
-def _save_subscribers(subscribers: dict[int, BibineSubscriber]) -> None:
-    try:
-        _SUBSCRIBERS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        payload = [
-            {
-                "user_id": s.user_id,
-                "first_name": s.first_name,
-                "username": s.username,
-            }
-            for s in sorted(subscribers.values(), key=lambda x: x.user_id)
-        ]
-        _SUBSCRIBERS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save bibine subscribers: %s", exc)
-
-
-def _load_state() -> dict[str, str]:
-    if not _STATE_PATH.exists():
-        return {}
-    try:
-        raw = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Could not read bibine state: %s", exc)
-        return {}
-    if not isinstance(raw, dict):
-        return {}
-    return {str(key): str(value) for key, value in raw.items() if value is not None}
-
-
-def _save_state(state: dict[str, str]) -> None:
-    try:
-        _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save bibine state: %s", exc)
+        if existing.get(k) != v:
+            await bibine_repo.set_state(k, v)
 
 
 def _target_friday_date(now: datetime) -> datetime.date:
@@ -141,42 +91,78 @@ def _poll_key(chat_id: int, message_id: int) -> str:
     return f"{chat_id}:{message_id}"
 
 
-def _load_polls() -> dict[str, dict]:
-    if not _POLLS_PATH.exists():
-        return {}
+def _parse_poll_key(key: str) -> tuple[int, int] | None:
     try:
-        raw = json.loads(_POLLS_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Could not read bibine polls: %s", exc)
-        return {}
-    return raw if isinstance(raw, dict) else {}
+        chat_str, msg_str = key.split(":", maxsplit=1)
+        return int(chat_str), int(msg_str)
+    except (ValueError, AttributeError):
+        return None
 
 
-def _save_polls(polls: dict[str, dict]) -> None:
-    try:
-        _POLLS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _POLLS_PATH.write_text(json.dumps(polls, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save bibine polls: %s", exc)
+async def _load_polls() -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for entry in await bibine_repo.list_active_polls():
+        key = _poll_key(int(entry["chat_id"]), int(entry["message_id"]))
+        payload = entry["payload"]
+        if isinstance(payload, dict):
+            payload.setdefault("type", entry["type"])
+            out[key] = payload
+    return out
 
 
-def _load_place_state() -> dict[str, dict]:
-    if not _PLACE_STATE_PATH.exists():
-        return {}
-    try:
-        raw = json.loads(_PLACE_STATE_PATH.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Could not read bibine place state: %s", exc)
-        return {}
-    return raw if isinstance(raw, dict) else {}
+async def _save_polls(polls: dict[str, dict]) -> None:
+    for key, payload in polls.items():
+        parsed = _parse_poll_key(key)
+        if not parsed or not isinstance(payload, dict):
+            continue
+        chat_id, message_id = parsed
+        poll_type = str(payload.get("type") or ("place" if "proposals" in payload else "ping"))
+        await bibine_repo.save_poll(chat_id, message_id, poll_type, payload)
 
 
-def _save_place_state(state: dict[str, dict]) -> None:
-    try:
-        _PLACE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _PLACE_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save bibine place state: %s", exc)
+async def _load_place_state() -> dict[str, dict]:
+    """Load all place-state rows into a dict keyed by 'chat_id:week_iso' for compatibility."""
+    import json as _json
+
+    from daddy_bot.core.db import get_connection as _get_conn
+    conn = await _get_conn()
+    out: dict[str, dict] = {}
+    async with conn.execute(
+        "SELECT chat_id, week_iso, poll_message_id, proposals FROM bibine_place_state"
+    ) as cur:
+        rows = await cur.fetchall()
+    for r in rows:
+        try:
+            proposals = _json.loads(r[3])
+        except _json.JSONDecodeError:
+            proposals = []
+        out[_week_key_for_chat(int(r[0]), str(r[1]))] = {
+            "chat_id": int(r[0]),
+            "week_iso": str(r[1]),
+            "poll_message_id": r[2],
+            "proposals": proposals if isinstance(proposals, list) else [],
+        }
+    return out
+
+
+async def _save_place_state(place_state: dict[str, dict]) -> None:
+    for week_state in place_state.values():
+        if not isinstance(week_state, dict):
+            continue
+        try:
+            chat_id = int(week_state["chat_id"])
+            week_iso = str(week_state["week_iso"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        poll_message_id = week_state.get("poll_message_id")
+        try:
+            poll_message_id_int = int(poll_message_id) if poll_message_id is not None else None
+        except (TypeError, ValueError):
+            poll_message_id_int = None
+        proposals = week_state.get("proposals")
+        if not isinstance(proposals, list):
+            proposals = []
+        await bibine_repo.save_place_state(chat_id, week_iso, poll_message_id_int, proposals)
 
 
 def _build_poll_keyboard(yes_count: int, no_count: int) -> InlineKeyboardMarkup:
@@ -186,10 +172,6 @@ def _build_poll_keyboard(yes_count: int, no_count: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=f"❌ Pas chaud ({no_count})", callback_data="bibine:no"),
         ]]
     )
-
-
-def _mention_html(user_id: int, label: str) -> str:
-    return f'<a href="tg://user?id={user_id}">{html.escape(label)}</a>'
 
 
 def _build_poll_text(mentions_html: str, yes_votes: list[dict], no_votes: list[dict]) -> str:
@@ -324,7 +306,7 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
         )
         return
 
-    place_state = _load_place_state()
+    place_state = await _load_place_state()
     week_state = place_state.get(week_key)
     if not isinstance(week_state, dict):
         week_state = {
@@ -371,9 +353,9 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
 
     week_state["proposals"] = proposals
     place_state[week_key] = week_state
-    _save_place_state(place_state)
+    await _save_place_state(place_state)
 
-    polls = _load_polls()
+    polls = await _load_polls()
     poll_message_id = week_state.get("poll_message_id")
     votes: list[dict] = []
     poll_key: str | None = None
@@ -411,7 +393,7 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
             poll["proposals"] = proposals
             poll["votes"] = votes
             polls[poll_key] = poll
-            _save_polls(polls)
+            await _save_polls(polls)
 
             if len(proposals) >= 2:
                 text = _build_place_poll_text(week_iso=week_iso, proposals=proposals, votes=votes)
@@ -455,7 +437,13 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
                 except TelegramBadRequest as exc:
                     if "message is not modified" not in str(exc).lower():
                         logger.warning("Could not update empty bibine place poll message: %s", exc)
-        # No extra confirmation message: poll edit already reflects the removal.
+        else:
+            # No poll was ever created for this week (only this proposal existed); confirm removal explicitly.
+            await message.reply(
+                f"🗑️ Proposition retirée: <b>{html.escape(removed_name)}</b>.",
+                parse_mode="HTML",
+                disable_notification=True,
+            )
         return
 
     proposals.append(
@@ -468,7 +456,7 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
 
     week_state["proposals"] = proposals
     place_state[week_key] = week_state
-    _save_place_state(place_state)
+    await _save_place_state(place_state)
 
     if len(proposals) == 1:
         only_place = proposals[0]
@@ -501,8 +489,8 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
             "proposals": proposals,
             "votes": votes,
         }
-        _save_place_state(place_state)
-        _save_polls(polls)
+        await _save_place_state(place_state)
+        await _save_polls(polls)
         return
 
     poll = polls.get(poll_key, {})
@@ -511,7 +499,7 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
     poll["proposals"] = proposals
     poll["votes"] = votes
     polls[poll_key] = poll
-    _save_polls(polls)
+    await _save_polls(polls)
 
     text = _build_place_poll_text(week_iso=week_iso, proposals=proposals, votes=votes)
     keyboard = _build_place_keyboard(proposals=proposals, votes=votes)
@@ -548,13 +536,13 @@ async def _send_bibine_ping(bot: Bot, channel_id: int, mentions_html: str) -> No
         disable_notification=False,
     )
 
-    polls = _load_polls()
+    polls = await _load_polls()
     polls[_poll_key(channel_id, sent.message_id)] = {
         "mentions_html": mentions_html,
         "yes_votes": yes_votes,
         "no_votes": no_votes,
     }
-    _save_polls(polls)
+    await _save_polls(polls)
 
 
 @router.callback_query(F.data.startswith("bibine:"))
@@ -568,7 +556,7 @@ async def on_bibine_vote(callback: CallbackQuery) -> None:
         await callback.answer()
         return
 
-    polls = _load_polls()
+    polls = await _load_polls()
     key = _poll_key(callback.message.chat.id, callback.message.message_id)
     poll = polls.get(key)
     if not isinstance(poll, dict):
@@ -598,7 +586,7 @@ async def on_bibine_vote(callback: CallbackQuery) -> None:
     poll["yes_votes"] = yes_votes
     poll["no_votes"] = no_votes
     polls[key] = poll
-    _save_polls(polls)
+    await _save_polls(polls)
 
     new_text = _build_poll_text(mentions_html, yes_votes, no_votes)
     keyboard = _build_poll_keyboard(yes_count=len(yes_votes), no_count=len(no_votes))
@@ -623,7 +611,7 @@ async def on_bibine_place_vote(callback: CallbackQuery) -> None:
         await callback.answer()
         return
 
-    polls = _load_polls()
+    polls = await _load_polls()
     key = _poll_key(callback.message.chat.id, callback.message.message_id)
     poll = polls.get(key)
     if not isinstance(poll, dict) or poll.get("type") != "place":
@@ -649,7 +637,7 @@ async def on_bibine_place_vote(callback: CallbackQuery) -> None:
 
     poll["votes"] = votes
     polls[key] = poll
-    _save_polls(polls)
+    await _save_polls(polls)
 
     text = _build_place_poll_text(week_iso=week_iso, proposals=proposals, votes=votes)
     keyboard = _build_place_keyboard(proposals=proposals, votes=votes)
@@ -677,11 +665,11 @@ async def on_bibine(message: Message) -> None:
         return
 
     user = message.from_user
-    subscribers = _load_subscribers()
+    subscribers = await _load_subscribers()
 
     if user.id in subscribers:
         subscribers.pop(user.id, None)
-        _save_subscribers(subscribers)
+        await _save_subscribers(subscribers)
         await message.reply("Tu es retiré des pings bibine. 🫡", disable_notification=True)
         return
 
@@ -690,7 +678,7 @@ async def on_bibine(message: Message) -> None:
         first_name=user.first_name or "Copain",
         username=user.username,
     )
-    _save_subscribers(subscribers)
+    await _save_subscribers(subscribers)
 
     settings = get_settings()
     channel_txt = "\n⚠️ BIBINE_CHANNEL_ID n'est pas configuré."
@@ -739,7 +727,7 @@ async def on_bibine_test(message: Message) -> None:
         await message.reply("⚠️ BIBINE_CHANNEL_ID n'est pas configuré.", parse_mode="HTML")
         return
 
-    subscribers = _load_subscribers()
+    subscribers = await _load_subscribers()
     if not subscribers:
         await message.reply("Personne n'est inscrit aux pings bibine.", parse_mode="HTML")
         return
@@ -777,7 +765,7 @@ async def run_bibine_scheduler(bot: Bot) -> None:
     while True:
         now = datetime.now(tz=tz)
         target_week = _target_friday_date(now).isoformat()
-        state = _load_state()
+        state = await _load_state()
 
         if state.get("last_sent_week") == target_week:
             # Already sent this week; wake up later and re-evaluate.
@@ -800,18 +788,18 @@ async def run_bibine_scheduler(bot: Bot) -> None:
             scheduled_at = _random_window_datetime(friday_date, tz)
             state["scheduled_week"] = target_week
             state["scheduled_at"] = scheduled_at.isoformat()
-            _save_state(state)
+            await _save_state(state)
             logger.info("New bibine reminder scheduled for week %s at %s.", target_week, scheduled_at.isoformat())
 
         wait_seconds = (scheduled_at - now).total_seconds()
         if wait_seconds > 0:
             await asyncio.sleep(wait_seconds)
 
-        subscribers = _load_subscribers()
+        subscribers = await _load_subscribers()
         if not subscribers:
             logger.info("No bibine subscribers, skipping reminder for week %s.", target_week)
             state["last_sent_week"] = target_week
-            _save_state(state)
+            await _save_state(state)
             continue
 
         mentions = " ".join(sub.mention_html for sub in subscribers.values())
@@ -819,7 +807,7 @@ async def run_bibine_scheduler(bot: Bot) -> None:
         try:
             await _send_bibine_ping(bot, settings.bibine_channel_id, mentions)
             state["last_sent_week"] = target_week
-            _save_state(state)
+            await _save_state(state)
             logger.info("Bibine reminder sent for week %s.", target_week)
         except Exception as exc:
             logger.exception("Failed to send bibine reminder: %s", exc)

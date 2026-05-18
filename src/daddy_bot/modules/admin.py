@@ -1,6 +1,4 @@
-import json
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from aiogram import F, Router
@@ -9,12 +7,12 @@ from aiogram.filters import Command
 from aiogram.types import ChatMemberUpdated, FSInputFile, Message
 
 from daddy_bot.core.config import get_settings
+from daddy_bot.db.repositories import chats_repo
 
 logger = logging.getLogger(__name__)
 
 router = Router(name="admin")
 
-_DATA_PATH = Path(__file__).parents[3] / "data" / "chats.json"
 _ASSETS_PATH = Path(__file__).parents[3] / "assets"
 
 _CHAT_TYPE_ICON = {
@@ -31,81 +29,33 @@ _VIDEO_EXTENSIONS = {".mp4"}
 _AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".flac"}
 _VOICE_EXTENSIONS = {".ogg"}
 
-_registry_cache: dict[str, dict] | None = None
-
-
-# ---------------------------------------------------------------------------
-# Persistence helpers
-# ---------------------------------------------------------------------------
-
-def _load_registry() -> dict[str, dict]:
-    if _DATA_PATH.exists():
-        try:
-            return json.loads(_DATA_PATH.read_text(encoding="utf-8"))
-        except Exception as exc:
-            logger.warning("Could not read chat registry: %s", exc)
-    return {}
-
-
-def _save_registry(registry: dict[str, dict]) -> None:
-    try:
-        _DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _DATA_PATH.write_text(json.dumps(registry, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as exc:
-        logger.warning("Could not save chat registry: %s", exc)
-
-
-def _get_registry() -> dict[str, dict]:
-    global _registry_cache
-    if _registry_cache is None:
-        _registry_cache = _load_registry()
-    return _registry_cache
-
-
-def _upsert_chat_entry(registry: dict[str, dict], message: Message) -> bool:
-    chat = message.chat
-    chat_id = str(chat.id)
-    entry = {
-        "id": chat.id,
-        "type": chat.type,
-        "title": chat.title or chat.full_name or str(chat.id),
-        "username": chat.username,
-        "last_seen_at": datetime.utcnow().isoformat(timespec="seconds"),
-    }
-    changed = registry.get(chat_id) != entry
-    registry[chat_id] = entry
-    return changed
-
-
-# ---------------------------------------------------------------------------
-# Track bot membership changes
-# ---------------------------------------------------------------------------
 
 @router.my_chat_member()
 async def on_my_chat_member(update: ChatMemberUpdated) -> None:
-    registry = _get_registry()
-    chat_id = str(update.chat.id)
-
     if update.new_chat_member.status in _ACTIVE_STATUSES:
-        registry[chat_id] = {
-            "id": update.chat.id,
-            "type": update.chat.type,
-            "title": update.chat.title or update.chat.full_name or str(update.chat.id),
-            "username": update.chat.username,
-        }
+        title = update.chat.title or update.chat.full_name or str(update.chat.id)
+        await chats_repo.upsert_chat(
+            chat_id=update.chat.id,
+            chat_type=update.chat.type,
+            title=title,
+            username=update.chat.username,
+        )
         logger.info("Bot joined chat %s (%s)", update.chat.id, update.chat.type)
     else:
-        registry.pop(chat_id, None)
+        await chats_repo.remove_chat(update.chat.id)
         logger.info("Bot left chat %s", update.chat.id)
-
-    _save_registry(registry)
 
 
 @router.message(F.chat.type.in_(_TRACKED_GROUP_TYPES))
 async def on_group_interaction(message: Message) -> None:
-    registry = _get_registry()
-    if _upsert_chat_entry(registry, message):
-        _save_registry(registry)
+    chat = message.chat
+    title = chat.title or chat.full_name or str(chat.id)
+    await chats_repo.upsert_chat(
+        chat_id=chat.id,
+        chat_type=chat.type,
+        title=title,
+        username=chat.username,
+    )
     # Keep this tracker non-blocking so other group handlers can run.
     raise SkipHandler()
 
@@ -124,8 +74,8 @@ async def on_server(message: Message) -> None:
         await message.reply("⛔ Accès non autorisé.", parse_mode="HTML")
         return
 
-    registry = _get_registry()
-    if not registry:
+    entries = await chats_repo.list_chats()
+    if not entries:
         await message.reply(
             "Aucun groupe enregistré. Le bot ajoutera automatiquement les groupes où il y a des interactions.",
             parse_mode="HTML",
@@ -133,14 +83,12 @@ async def on_server(message: Message) -> None:
         )
         return
 
-    lines: list[str] = [f"<b>🤖 Bot présent dans {len(registry)} chat(s) :</b>\n"]
-    for entry in sorted(registry.values(), key=lambda e: e.get("type", "")):
-        icon = _CHAT_TYPE_ICON.get(entry.get("type", ""), "💬")
-        title = entry.get("title") or str(entry.get("id"))
-        chat_id = entry.get("id")
-        username = entry.get("username")
-        mention = f" @{username}" if username else ""
-        lines.append(f"{icon} <b>{title}</b>{mention}\n   <code>{chat_id}</code>")
+    lines: list[str] = [f"<b>🤖 Bot présent dans {len(entries)} chat(s) :</b>\n"]
+    for entry in entries:
+        icon = _CHAT_TYPE_ICON.get(entry.type, "💬")
+        title = entry.title or str(entry.id)
+        mention = f" @{entry.username}" if entry.username else ""
+        lines.append(f"{icon} <b>{title}</b>{mention}\n   <code>{entry.id}</code>")
 
     await message.reply(
         "\n".join(lines),

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Broadcast{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Broadcast</h1>
+
+<div class="bg-white shadow rounded-lg p-6 mb-8">
+  <form method="post" action="/admin/broadcast/send" class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Target Chat</label>
+      <select name="chat_id" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+        {% for chat in chats %}
+        <option value="{{ chat.id }}">{{ chat.title or chat.username or chat.id }} ({{ chat.type }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Parse Mode</label>
+      <select name="parse_mode" class="mt-1 block w-40 rounded-md border-gray-300 shadow-sm text-sm">
+        <option value="HTML">HTML</option>
+        <option value="Markdown">Markdown</option>
+        <option value="">None</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Message</label>
+      <textarea name="text" rows="6" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm font-mono"></textarea>
+    </div>
+    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">Send</button>
+  </form>
+</div>
+
+{% if log %}
+<div class="bg-white shadow rounded-lg p-6">
+  <h2 class="text-lg font-semibold text-gray-900 mb-4">Broadcast Log (last {{ log|length }})</h2>
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left">Sent At</th>
+        <th class="px-4 py-2 text-left">By</th>
+        <th class="px-4 py-2 text-left">Chat</th>
+        <th class="px-4 py-2 text-left">Preview</th>
+        <th class="px-4 py-2 text-left">OK?</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for entry in log %}
+      <tr>
+        <td class="px-4 py-2 text-gray-600">{{ entry.sent_at }}</td>
+        <td class="px-4 py-2">{{ entry.sent_by }}</td>
+        <td class="px-4 py-2">{{ entry.target_chat_id }}</td>
+        <td class="px-4 py-2 max-w-xs truncate">{{ entry.message_preview }}</td>
+        <td class="px-4 py-2 {% if entry.success %}text-green-600{% else %}text-red-600{% endif %}">
+          {{ '✓' if entry.success else '✗' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

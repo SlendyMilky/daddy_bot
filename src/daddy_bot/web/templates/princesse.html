@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Princesse{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Princesse Morning</h1>
+
+<div class="mb-8">
+  <form method="post" action="/admin/princesse/test_ritual">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="px-4 py-2 bg-pink-600 text-white rounded hover:bg-pink-700">Test Ritual (DM Owner)</button>
+  </form>
+</div>
+
+{% for chat_id, members in pools.items() %}
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold text-gray-900 mb-4">Pool — Chat {{ chat_id }} ({{ members|length }} members)</h2>
+  {% if members %}
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left">User ID</th>
+        <th class="px-4 py-2 text-left">Name</th>
+        <th class="px-4 py-2 text-left">Username</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for m in members %}
+      <tr>
+        <td class="px-4 py-2">{{ m.user_id }}</td>
+        <td class="px-4 py-2">{{ m.first_name }}</td>
+        <td class="px-4 py-2">{{ m.username or '—' }}</td>
+        <td class="px-4 py-2">
+          <form method="post" action="/admin/princesse/remove_member">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="chat_id" value="{{ chat_id }}">
+            <input type="hidden" name="target_user_id" value="{{ m.user_id }}">
+            <button type="submit" class="text-red-600 hover:text-red-800 text-xs"
+                    onclick="return confirm('Remove {{ m.user_id }} from pool?')">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-gray-500">Pool is empty.</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if history %}
+<div class="bg-white shadow rounded-lg p-6">
+  <h2 class="text-lg font-semibold text-gray-900 mb-4">Send History (last {{ history|length }})</h2>
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left">Sent At</th>
+        <th class="px-4 py-2 text-left">Chat</th>
+        <th class="px-4 py-2 text-left">User</th>
+        <th class="px-4 py-2 text-left">Voice</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for h in history %}
+      <tr>
+        <td class="px-4 py-2">{{ h.sent_at }}</td>
+        <td class="px-4 py-2">{{ h.chat_id }}</td>
+        <td class="px-4 py-2">{{ h.user_id }}</td>
+        <td class="px-4 py-2">{{ h.voice_file }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

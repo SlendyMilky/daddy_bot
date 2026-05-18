@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+<div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+  <div class="bg-white shadow rounded-lg p-6">
+    <p class="text-sm font-medium text-gray-500">Tracked Chats</p>
+    <p class="mt-2 text-3xl font-bold text-indigo-600">{{ chat_count }}</p>
+  </div>
+  <div class="bg-white shadow rounded-lg p-6">
+    <p class="text-sm font-medium text-gray-500">Bibine Subscribers</p>
+    <p class="mt-2 text-3xl font-bold text-indigo-600">{{ subscriber_count }}</p>
+  </div>
+  <div class="bg-white shadow rounded-lg p-6">
+    <p class="text-sm font-medium text-gray-500">Next Bibine Ping</p>
+    <p class="mt-2 text-sm text-gray-800 break-all">{{ bibine_state.get('scheduled_at', '—') }}</p>
+  </div>
+</div>
+
+{% if princesse_history %}
+<div class="mt-8 bg-white shadow rounded-lg p-6">
+  <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Princesse Sends</h2>
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left text-gray-600">Sent At</th>
+        <th class="px-4 py-2 text-left text-gray-600">Chat ID</th>
+        <th class="px-4 py-2 text-left text-gray-600">User ID</th>
+        <th class="px-4 py-2 text-left text-gray-600">Voice File</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for h in princesse_history %}
+      <tr>
+        <td class="px-4 py-2 text-gray-700">{{ h.sent_at }}</td>
+        <td class="px-4 py-2 text-gray-700">{{ h.chat_id }}</td>
+        <td class="px-4 py-2 text-gray-700">{{ h.user_id }}</td>
+        <td class="px-4 py-2 text-gray-700">{{ h.voice_file }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

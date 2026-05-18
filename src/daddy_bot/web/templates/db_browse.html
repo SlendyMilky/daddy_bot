@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}DB Browse{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Database (Read-Only)</h1>
+
+<div class="flex gap-4 mb-6">
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Table</label>
+    <form method="get" action="/admin/db">
+      <select name="table" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm">
+        <option value="">— select —</option>
+        {% for t in all_tables %}
+        <option value="{{ t }}" {% if t == table %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+</div>
+
+{% if error %}
+<div class="bg-red-50 border border-red-200 text-red-700 rounded p-4 mb-4">{{ error }}</div>
+{% endif %}
+
+{% if table and columns %}
+<div class="bg-white shadow rounded-lg overflow-x-auto">
+  <div class="px-6 py-4 flex items-center justify-between border-b border-gray-200">
+    <p class="text-sm text-gray-600">{{ table }} — {{ total }} rows (page {{ page }}/{{ total_pages }})</p>
+    <div class="flex gap-2">
+      {% if page > 1 %}
+      <a href="/admin/db?table={{ table }}&page={{ page - 1 }}" class="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200">← Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+      <a href="/admin/db?table={{ table }}&page={{ page + 1 }}" class="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  <table class="min-w-full text-xs">
+    <thead class="bg-gray-50">
+      <tr>
+        {% for col in columns %}
+        <th class="px-3 py-2 text-left text-gray-600 whitespace-nowrap">{{ col }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for row in rows %}
+      <tr class="hover:bg-gray-50">
+        {% for cell in row %}
+        <td class="px-3 py-2 max-w-xs truncate text-gray-800">{{ cell }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif table %}
+<p class="text-gray-500">No rows or table not accessible.</p>
+{% endif %}
+{% endblock %}
