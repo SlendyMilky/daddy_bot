@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from daddy_bot.web.routes import auth, bibine, broadcast, dashboard, db_browse, logs, princesse
+from daddy_bot.web.routes import auth, bibine, broadcast, chat, dashboard, db_browse, logs, princesse
 from daddy_bot.web.sessions import purge_expired_sessions
 
 if TYPE_CHECKING:
@@ -91,6 +91,7 @@ def create_admin_app(*, bot: Bot | None, settings: Settings) -> FastAPI:
     app.include_router(bibine.router, prefix="/admin/bibine")
     app.include_router(princesse.router, prefix="/admin/princesse")
     app.include_router(broadcast.router, prefix="/admin/broadcast")
+    app.include_router(chat.router, prefix="/admin/chat")
     app.include_router(logs.router, prefix="/admin/logs")
     app.include_router(db_browse.router, prefix="/admin/db")
 

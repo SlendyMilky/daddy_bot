@@ -120,6 +120,18 @@ async def save_poll(chat_id: int, message_id: int, poll_type: str, payload: dict
         """,
         (chat_id, message_id, poll_type, serialized),
     )
+    # Keep only the 3 most recent polls per (chat_id, type) to avoid unbounded growth
+    await conn.execute(
+        """
+        DELETE FROM bibine_polls
+        WHERE chat_id=? AND type=? AND message_id NOT IN (
+            SELECT message_id FROM bibine_polls
+            WHERE chat_id=? AND type=?
+            ORDER BY created_at DESC LIMIT 3
+        )
+        """,
+        (chat_id, poll_type, chat_id, poll_type),
+    )
     await conn.commit()
 
 
@@ -185,5 +197,17 @@ async def save_place_state(chat_id: int, week_iso: str, poll_message_id: int | N
             proposals=excluded.proposals
         """,
         (chat_id, week_iso, poll_message_id, serialized),
+    )
+    # Keep only the 4 most recent weeks per chat to avoid unbounded growth
+    await conn.execute(
+        """
+        DELETE FROM bibine_place_state
+        WHERE chat_id=? AND week_iso NOT IN (
+            SELECT week_iso FROM bibine_place_state
+            WHERE chat_id=?
+            ORDER BY week_iso DESC LIMIT 4
+        )
+        """,
+        (chat_id, chat_id),
     )
     await conn.commit()

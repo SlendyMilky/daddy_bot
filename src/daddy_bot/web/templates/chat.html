@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Live Chat{% endblock %}
+{% block content %}
+<div class="flex gap-6 h-[calc(100vh-10rem)]">
+
+  <!-- Sidebar: chat list -->
+  <div class="w-64 flex-shrink-0 bg-white shadow rounded-xl overflow-y-auto">
+    <div class="px-4 py-3 border-b border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Groupes</h2>
+    </div>
+    {% if chats %}
+      {% for chat in chats %}
+      <a href="/admin/chat/{{ chat.id }}"
+         class="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 transition-colors
+                {% if active_chat and active_chat.id == chat.id %}bg-indigo-50 border-r-2 border-indigo-600{% endif %}">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0
+                    {% if chat.type == 'supergroup' or chat.type == 'group' %}bg-indigo-500
+                    {% elif chat.type == 'channel' %}bg-purple-500
+                    {% else %}bg-gray-400{% endif %}">
+          {{ (chat.title or chat.username or '?')[0]|upper }}
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-gray-900 truncate">{{ chat.title or chat.username or chat.id }}</p>
+          <p class="text-xs text-gray-400 truncate">{{ chat.type }}</p>
+        </div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <p class="px-4 py-6 text-sm text-gray-400 text-center">Aucun chat suivi.</p>
+    {% endif %}
+  </div>
+
+  <!-- Main chat area -->
+  <div class="flex-1 flex flex-col bg-white shadow rounded-xl overflow-hidden">
+    {% if active_chat %}
+    <!-- Chat header -->
+    <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold
+                    {% if active_chat.type == 'supergroup' or active_chat.type == 'group' %}bg-indigo-500
+                    {% elif active_chat.type == 'channel' %}bg-purple-500
+                    {% else %}bg-gray-400{% endif %}">
+          {{ (active_chat.title or active_chat.username or '?')[0]|upper }}
+        </div>
+        <div>
+          <h1 class="font-semibold text-gray-900">{{ active_chat.title or active_chat.username or active_chat.id }}</h1>
+          <p class="text-xs text-gray-400">{{ active_chat.type }} · ID {{ active_chat.id }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="conn-badge"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+          <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+          Connexion…
+        </span>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div id="messages" class="flex-1 overflow-y-auto px-6 py-4 space-y-3 scroll-smooth">
+      {% if not recent_messages %}
+      <p id="empty-hint" class="text-center text-sm text-gray-400 mt-8">
+        En attente de messages — les nouveaux messages apparaîtront ici en temps réel.
+      </p>
+      {% endif %}
+
+      {% for msg in recent_messages %}
+      <div class="flex items-end gap-2 {% if msg.is_bot %}flex-row-reverse{% endif %}">
+        <div class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
+                    {% if msg.is_bot %}bg-indigo-600 text-white{% else %}bg-gray-200 text-gray-600{% endif %}">
+          {{ msg.sender[0]|upper if msg.sender else '?' }}
+        </div>
+        <div class="max-w-lg {% if msg.is_bot %}items-end{% endif %} flex flex-col gap-0.5">
+          <span class="text-xs text-gray-400 {% if msg.is_bot %}text-right{% endif %}">
+            {{ msg.sender }}{% if msg.date %} · <time>{{ msg.date[:19]|replace('T', ' ') }}</time>{% endif %}
+          </span>
+          <div class="px-3.5 py-2 rounded-2xl text-sm leading-relaxed break-words
+                      {% if msg.is_bot %}bg-indigo-600 text-white rounded-br-sm
+                      {% else %}bg-gray-100 text-gray-900 rounded-bl-sm{% endif %}">
+            {% if msg.media_type %}
+            <span class="italic text-opacity-75">[{{ msg.media_type }}]</span>
+            {% endif %}
+            {% if msg.text %}{{ msg.text }}{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Compose -->
+    <div class="px-6 py-4 border-t border-gray-100 flex-shrink-0">
+      <form id="send-form" method="post" action="/admin/chat/send" class="flex gap-3 items-end">
+        <input type="hidden" name="chat_id" value="{{ active_chat.id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <textarea name="text" id="compose" rows="1" placeholder="Écrire un message…"
+                  class="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+                         placeholder-gray-400 max-h-32"
+                  oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea>
+        <button type="submit"
+                class="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 text-white
+                       text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
+          </svg>
+          Envoyer
+        </button>
+      </form>
+    </div>
+
+    {% else %}
+    <!-- No chat selected -->
+    <div class="flex-1 flex flex-col items-center justify-center text-center px-8">
+      <div class="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
+        <svg class="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+        </svg>
+      </div>
+      <h2 class="text-lg font-semibold text-gray-700 mb-1">Sélectionne un groupe</h2>
+      <p class="text-sm text-gray-400">Les messages arrivent en direct — aucun historique n'est stocké.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if active_chat %}
+<script>
+(function () {
+  const chatId = {{ active_chat.id }};
+  const messagesEl = document.getElementById('messages');
+  const connBadge = document.getElementById('conn-badge');
+  const emptyHint = document.getElementById('empty-hint');
+
+  function scrollBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+  scrollBottom();
+
+  function setConnected(ok) {
+    if (ok) {
+      connBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-green-400"></span> En direct';
+      connBadge.className = connBadge.className.replace(/bg-\w+-100 text-\w+-\d+/g, '') +
+        ' bg-green-100 text-green-700';
+    } else {
+      connBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-400"></span> Déconnecté';
+      connBadge.className = connBadge.className.replace(/bg-\w+-100 text-\w+-\d+/g, '') +
+        ' bg-red-100 text-red-700';
+    }
+  }
+
+  function appendMessage(msg) {
+    if (emptyHint) emptyHint.remove();
+
+    const isBot = msg.is_bot === true;
+    const initial = msg.sender ? msg.sender[0].toUpperCase() : '?';
+    const dateStr = msg.date ? msg.date.substring(0, 19).replace('T', ' ') : '';
+    const mediaHtml = msg.media_type ? `<span class="italic opacity-75">[${msg.media_type}]</span> ` : '';
+    const textHtml = msg.text ? escapeHtml(msg.text).replace(/\n/g, '<br>') : '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'flex items-end gap-2' + (isBot ? ' flex-row-reverse' : '');
+    wrap.innerHTML = `
+      <div class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
+                  ${isBot ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}">${initial}</div>
+      <div class="max-w-lg flex flex-col gap-0.5 ${isBot ? 'items-end' : ''}">
+        <span class="text-xs text-gray-400 ${isBot ? 'text-right' : ''}">
+          ${escapeHtml(msg.sender || '')}${dateStr ? ' · <time>' + dateStr + '</time>' : ''}
+        </span>
+        <div class="px-3.5 py-2 rounded-2xl text-sm leading-relaxed break-words
+                    ${isBot
+                      ? 'bg-indigo-600 text-white rounded-br-sm'
+                      : 'bg-gray-100 text-gray-900 rounded-bl-sm'}">
+          ${mediaHtml}${textHtml}
+        </div>
+      </div>`;
+    messagesEl.appendChild(wrap);
+    scrollBottom();
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  let evtSource;
+  function connect() {
+    evtSource = new EventSource(`/admin/chat/stream/${chatId}`);
+    evtSource.onopen = () => setConnected(true);
+    evtSource.onerror = () => {
+      setConnected(false);
+      evtSource.close();
+      setTimeout(connect, 3000);
+    };
+    evtSource.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.keep) return;
+        appendMessage(msg);
+      } catch (_) {}
+    };
+  }
+  connect();
+})();
+</script>
+{% endif %}
+{% endblock %}

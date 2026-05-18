@@ -135,6 +135,11 @@ async def record_send(chat_id: int, user_id: int, voice_file: str) -> None:
         "INSERT INTO princesse_history(sent_at, chat_id, user_id, voice_file) VALUES (?, ?, ?, ?)",
         (datetime.now(tz=UTC).isoformat(), chat_id, user_id, voice_file),
     )
+    # Cap history at 200 rows to avoid unbounded growth
+    await conn.execute(
+        "DELETE FROM princesse_history WHERE id NOT IN "
+        "(SELECT id FROM princesse_history ORDER BY id DESC LIMIT 200)"
+    )
     await conn.commit()
 
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiogram import Bot, F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.enums import ChatAction, ChatType
 from aiogram.filters import Command
 from aiogram.filters.command import CommandObject
@@ -464,16 +465,16 @@ async def on_princesse_morning_test(message: Message) -> None:
 
 @router.message(F.chat.id.func(lambda cid: cid in _chat_ids()))
 async def on_autopool_activity(message: Message) -> None:
-    if (message.text or "").startswith("/"):
-        return
     if not message.from_user or message.from_user.is_bot:
-        return
-    u = message.from_user
-    await princesse_repo.upsert_member(
-        message.chat.id,
-        PoolMember(
-            user_id=u.id,
-            first_name=u.first_name or "Copain",
-            username=u.username,
-        ),
-    )
+        raise SkipHandler()
+    if not (message.text or "").startswith("/"):
+        u = message.from_user
+        await princesse_repo.upsert_member(
+            message.chat.id,
+            PoolMember(
+                user_id=u.id,
+                first_name=u.first_name or "Copain",
+                username=u.username,
+            ),
+        )
+    raise SkipHandler()
