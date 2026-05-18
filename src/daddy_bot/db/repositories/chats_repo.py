@@ -1,4 +1,5 @@
 """SQLite-backed repository for the chats registry (replaces chats.json)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

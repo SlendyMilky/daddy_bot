@@ -1,4 +1,5 @@
 """FastAPI dependencies for admin panel authentication."""
+
 from __future__ import annotations
 
 import logging

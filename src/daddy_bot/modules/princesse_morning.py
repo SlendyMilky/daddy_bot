@@ -255,7 +255,9 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
 
         voices = _voice_candidates()
         if not voices:
-            logger.warning("Princesse morning: no .ogg voice files in %s, skipping %s.", _PRINCESSE_DIR, day_key)
+            logger.warning(
+                "Princesse morning: no .ogg voice files in %s, skipping %s.", _PRINCESSE_DIR, day_key
+            )
             state["last_sent_date"] = day_key
             state.pop("scheduled_date", None)
             state.pop("scheduled_at", None)
@@ -340,8 +342,7 @@ async def on_princesse_pool_clear(message: Message, command: CommandObject) -> N
     arg = (command.args or "").strip().lower()
     if arg not in ("ok", "oui", "confirm", "sure"):
         await message.reply(
-            "Pour vider le pool de <b>ce</b> groupe, envoie :\n"
-            "<code>/princesse_pool_clear ok</code>",
+            "Pour vider le pool de <b>ce</b> groupe, envoie :\n<code>/princesse_pool_clear ok</code>",
             parse_mode="HTML",
             disable_notification=True,
         )
@@ -439,7 +440,9 @@ async def on_princesse_morning_test(message: Message) -> None:
 
     voices = _voice_candidates()
     if not voices:
-        await message.reply(f"Aucun vocal dans {_PRINCESSE_DIR}", parse_mode="HTML", disable_notification=True)
+        await message.reply(
+            f"Aucun vocal dans {_PRINCESSE_DIR}", parse_mode="HTML", disable_notification=True
+        )
         return
 
     u = message.from_user
@@ -451,7 +454,9 @@ async def on_princesse_morning_test(message: Message) -> None:
     voice_path = random.choice(voices)
     try:
         await run_princesse_morning_ritual(message.bot, message.chat.id, member, voice_path)
-        await message.reply("Test terminé (ping + vocal sur toi). ✅", parse_mode="HTML", disable_notification=True)
+        await message.reply(
+            "Test terminé (ping + vocal sur toi). ✅", parse_mode="HTML", disable_notification=True
+        )
     except Exception as exc:
         logger.exception("princesse_morning_test failed: %s", exc)
         await message.reply("Erreur à l'envoi.", parse_mode="HTML", disable_notification=True)
@@ -472,4 +477,3 @@ async def on_autopool_activity(message: Message) -> None:
             username=u.username,
         ),
     )
-

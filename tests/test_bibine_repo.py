@@ -1,4 +1,5 @@
 """Tests for bibine_repo: subscribers, state KV, polls, place state."""
+
 from __future__ import annotations
 
 import pytest

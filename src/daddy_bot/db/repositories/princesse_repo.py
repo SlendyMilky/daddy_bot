@@ -1,4 +1,5 @@
 """SQLite-backed repository for princesse morning pool, state and send history."""
+
 from __future__ import annotations
 
 import html
@@ -21,6 +22,7 @@ class PoolMember:
 
 
 # --- Pool ------------------------------------------------------------------------
+
 
 async def upsert_member(chat_id: int, member: PoolMember) -> bool:
     """Insert or update a pool member; returns True if anything changed."""
@@ -94,6 +96,7 @@ async def list_pools_for_chats(chat_ids: tuple[int, ...]) -> dict[int, list[Pool
 
 # --- State ----------------------------------------------------------------------
 
+
 async def get_state(key: str) -> str | None:
     conn = await get_connection()
     async with conn.execute("SELECT value FROM princesse_state WHERE key=?", (key,)) as cur:
@@ -125,6 +128,7 @@ async def all_state() -> dict[str, str]:
 
 # --- History --------------------------------------------------------------------
 
+
 async def record_send(chat_id: int, user_id: int, voice_file: str) -> None:
     conn = await get_connection()
     await conn.execute(
@@ -141,7 +145,4 @@ async def list_history(limit: int = 50) -> list[dict]:
         (limit,),
     ) as cur:
         rows = await cur.fetchall()
-    return [
-        {"id": r[0], "sent_at": r[1], "chat_id": r[2], "user_id": r[3], "voice_file": r[4]}
-        for r in rows
-    ]
+    return [{"id": r[0], "sent_at": r[1], "chat_id": r[2], "user_id": r[3], "voice_file": r[4]} for r in rows]

@@ -37,7 +37,7 @@ _THINK_TRANSLATE_SYSTEM = (
 _COCKTAILDB_URL = "https://www.thecocktaildb.com/api/json/v1/1/random.php"
 _TRANSLATE_SYSTEM = (
     "Tu es un traducteur français. "
-    "Réponds UNIQUEMENT en JSON valide avec les clés \"verre\", \"ingredients\", \"instructions\". "
+    'Réponds UNIQUEMENT en JSON valide avec les clés "verre", "ingredients", "instructions". '
     "Traduis chaque champ en français et convertis toutes les mesures en système métrique."
 )
 
@@ -87,6 +87,7 @@ async def on_think(message: Message) -> None:
         post_url = f"https://reddit.com{post['permalink']}"
         upvotes = post.get("ups", 0)
         from datetime import datetime
+
         created = datetime.fromtimestamp(post.get("created_utc", 0), tz=UTC)
         date_str = created.strftime("%d.%m.%y")
 
@@ -141,17 +142,24 @@ async def on_cocktail(message: Message) -> None:
         settings = get_settings()
         if settings.openai_api_key:
             import json as _json
+
             client_ai = AsyncOpenAI(api_key=settings.openai_api_key)
             gpt_resp = await client_ai.chat.completions.create(
                 model="gpt-4.1-nano",
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": _TRANSLATE_SYSTEM},
-                    {"role": "user", "content": _json.dumps({
-                        "verre": glass_en,
-                        "ingredients": ingredients_en,
-                        "instructions": instructions_en,
-                    }, ensure_ascii=False)},
+                    {
+                        "role": "user",
+                        "content": _json.dumps(
+                            {
+                                "verre": glass_en,
+                                "ingredients": ingredients_en,
+                                "instructions": instructions_en,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
                 ],
             )
             data = _json.loads(gpt_resp.choices[0].message.content or "{}")
@@ -169,9 +177,17 @@ async def on_cocktail(message: Message) -> None:
             f"<b>📖 - Ingrédients</b>\n<i>{html.escape(ingredients)}</i>\n\n"
             f"<b>📝 - Instructions</b>\n<i>{html.escape(instructions)}</i>"
         )
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="📷 Photo FHD", url=thumb_url),
-        ]]) if thumb_url else None
+        keyboard = (
+            InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="📷 Photo FHD", url=thumb_url),
+                    ]
+                ]
+            )
+            if thumb_url
+            else None
+        )
 
         await status_msg.delete()
         await message.answer_photo(

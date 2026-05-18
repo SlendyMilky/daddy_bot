@@ -1,4 +1,5 @@
 """Tests for pure scheduling helpers (no IO)."""
+
 from __future__ import annotations
 
 import random

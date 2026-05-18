@@ -4,6 +4,7 @@ A single module-global aiosqlite connection is kept open for the lifetime of the
 process. WAL mode allows the bot and the (future) admin web server to read
 concurrently without blocking each other.
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """CSRF token helpers using itsdangerous, tied to the session sid."""
+
 from __future__ import annotations
 
 from itsdangerous import BadSignature, URLSafeSerializer

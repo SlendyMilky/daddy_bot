@@ -68,8 +68,12 @@ _PLANETE_RAP_STICKER_IDS = [
     "CAACAgQAAxkBAAII2Gm28nkGlLXyT9yGf653UyYjQorbAAL8FAACNHMpU3TZfj1KkDwtOgQ",
     "CAACAgQAAxkBAAII32m28z34F-YAAWVnzTy--0Gjx0dfugACBQIAAtlWtBhl22rMoVsO2ToE",
 ]
-_PLANETE_RAP_DOUBLE_STICKER_TRIGGER_ID = "CAACAgQAAxkBAAII32m28z34F-YAAWVnzTy--0Gjx0dfugACBQIAAtlWtBhl22rMoVsO2ToE"
-_PLANETE_RAP_DOUBLE_STICKER_FOLLOWUP_ID = "CAACAgQAAxkBAAII4Gm28z562JUUkSNXsvMORVTz3siVAAIGAgAC2Va0GDCs1_RXiBLVOgQ"
+_PLANETE_RAP_DOUBLE_STICKER_TRIGGER_ID = (
+    "CAACAgQAAxkBAAII32m28z34F-YAAWVnzTy--0Gjx0dfugACBQIAAtlWtBhl22rMoVsO2ToE"
+)
+_PLANETE_RAP_DOUBLE_STICKER_FOLLOWUP_ID = (
+    "CAACAgQAAxkBAAII4Gm28z562JUUkSNXsvMORVTz3siVAAIGAgAC2Va0GDCs1_RXiBLVOgQ"
+)
 _PLANETE_RAP_TEXT = "Ptain vlà planète rap qui débarque..."
 _PLANETE_RAP_COOLDOWN = timedelta(hours=6)
 _planete_rap_last_sent_at: datetime | None = None
@@ -600,6 +604,8 @@ async def on_maiscsupersa_random_voice(message: Message) -> None:
             disable_notification=True,
         )
         sent = True
-        logger.info("Maiscsupersa audio sent in chat=%s as reply to message=%s", message.chat.id, message.message_id)
+        logger.info(
+            "Maiscsupersa audio sent in chat=%s as reply to message=%s", message.chat.id, message.message_id
+        )
     finally:
         await _release_maiscsupersa_slot(sent=sent)

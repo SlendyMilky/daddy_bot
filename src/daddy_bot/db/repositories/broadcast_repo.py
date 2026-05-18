@@ -1,4 +1,5 @@
 """SQLite-backed repository for the broadcast audit log."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime

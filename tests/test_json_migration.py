@@ -1,4 +1,5 @@
 """Tests for JSON -> SQLite migration: roundtrip, archiving, idempotence."""
+
 from __future__ import annotations
 
 import json
@@ -13,10 +14,12 @@ from daddy_bot.db.repositories import bibine_repo, chats_repo, princesse_repo
 def _seed(data_dir: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "bibine_subscribers.json").write_text(
-        json.dumps([
-            {"user_id": 10, "first_name": "Alice", "username": "alice"},
-            {"user_id": 11, "first_name": "Bob", "username": None},
-        ]),
+        json.dumps(
+            [
+                {"user_id": 10, "first_name": "Alice", "username": "alice"},
+                {"user_id": 11, "first_name": "Bob", "username": None},
+            ]
+        ),
         encoding="utf-8",
     )
     (data_dir / "bibine_state.json").write_text(
@@ -24,30 +27,41 @@ def _seed(data_dir: Path) -> None:
         encoding="utf-8",
     )
     (data_dir / "bibine_polls.json").write_text(
-        json.dumps({
-            "-100:42": {"mentions_html": "x", "yes_votes": [], "no_votes": []},
-            "-100:43": {"type": "place", "week_iso": "2026-05-22", "proposals": [{"name": "Bar"}], "votes": []},
-        }),
+        json.dumps(
+            {
+                "-100:42": {"mentions_html": "x", "yes_votes": [], "no_votes": []},
+                "-100:43": {
+                    "type": "place",
+                    "week_iso": "2026-05-22",
+                    "proposals": [{"name": "Bar"}],
+                    "votes": [],
+                },
+            }
+        ),
         encoding="utf-8",
     )
     (data_dir / "bibine_places.json").write_text(
-        json.dumps({
-            "-100:2026-05-22": {
-                "chat_id": -100,
-                "week_iso": "2026-05-22",
-                "poll_message_id": 43,
-                "proposals": [{"name": "Bar"}],
+        json.dumps(
+            {
+                "-100:2026-05-22": {
+                    "chat_id": -100,
+                    "week_iso": "2026-05-22",
+                    "poll_message_id": 43,
+                    "proposals": [{"name": "Bar"}],
+                }
             }
-        }),
+        ),
         encoding="utf-8",
     )
     (data_dir / "princesse_morning_targets.json").write_text(
-        json.dumps({
-            "-1001": [
-                {"user_id": 50, "first_name": "P1", "username": "p1"},
-                {"user_id": 51, "first_name": "P2", "username": None},
-            ]
-        }),
+        json.dumps(
+            {
+                "-1001": [
+                    {"user_id": 50, "first_name": "P1", "username": "p1"},
+                    {"user_id": 51, "first_name": "P2", "username": None},
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     (data_dir / "princesse_morning_state.json").write_text(
@@ -55,10 +69,17 @@ def _seed(data_dir: Path) -> None:
         encoding="utf-8",
     )
     (data_dir / "chats.json").write_text(
-        json.dumps({
-            "-100": {"id": -100, "type": "supergroup", "title": "G1", "username": None,
-                     "last_seen_at": "2026-05-12T10:00:00"},
-        }),
+        json.dumps(
+            {
+                "-100": {
+                    "id": -100,
+                    "type": "supergroup",
+                    "title": "G1",
+                    "username": None,
+                    "last_seen_at": "2026-05-12T10:00:00",
+                },
+            }
+        ),
         encoding="utf-8",
     )
 

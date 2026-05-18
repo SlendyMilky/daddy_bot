@@ -11,6 +11,7 @@ Design:
 - After a successful import & commit, the source JSON is moved to
   `data/archive/{YYYY-MM-DD_HHMMSS}/<name>.json`. Collisions get `_1`, `_2`, etc.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -93,6 +94,7 @@ def _archive_json(root: Path, ts: str, filename: str) -> Path | None:
 
 # --- Per-file import logic ------------------------------------------------------
 
+
 async def _import_bibine_subscribers(conn, payload) -> int:
     if not isinstance(payload, list):
         return 0
@@ -106,8 +108,11 @@ async def _import_bibine_subscribers(conn, payload) -> int:
             continue
         await conn.execute(
             "INSERT OR REPLACE INTO bibine_subscribers(user_id, first_name, username) VALUES (?, ?, ?)",
-            (uid, str(item.get("first_name") or "Copain"),
-             str(item["username"]) if item.get("username") else None),
+            (
+                uid,
+                str(item.get("first_name") or "Copain"),
+                str(item["username"]) if item.get("username") else None,
+            ),
         )
         count += 1
     return count

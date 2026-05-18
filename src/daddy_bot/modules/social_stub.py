@@ -27,13 +27,18 @@ _TIKTOK_FULL_RE = re.compile(r"https?://(?:www\.)?tiktok\.com/@\w+/video/\d+[\w\
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _delete_button(prefix: str, message_id: int, username: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="Supprimer message original",
-            callback_data=f"{prefix} - {message_id} - {username}",
-        )
-    ]])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Supprimer message original",
+                    callback_data=f"{prefix} - {message_id} - {username}",
+                )
+            ]
+        ]
+    )
 
 
 async def _handle_delete_callback(callback: CallbackQuery, bot: Bot) -> None:
@@ -72,6 +77,7 @@ async def _handle_delete_callback(callback: CallbackQuery, bot: Bot) -> None:
 # Twitter / X
 # ---------------------------------------------------------------------------
 
+
 def _to_vxtwitter(url: str) -> str:
     return re.sub(r"(?:twitter|x)\.com", "vxtwitter.com", url, flags=re.IGNORECASE)
 
@@ -102,6 +108,7 @@ async def on_twitter_callback(callback: CallbackQuery, bot: Bot) -> None:
 # ---------------------------------------------------------------------------
 # TikTok
 # ---------------------------------------------------------------------------
+
 
 async def _resolve_tiktok_url(short_url: str) -> str:
     """Follow one redirect from a vm.tiktok.com short URL and return the full URL."""
@@ -151,6 +158,7 @@ async def on_tiktok_callback(callback: CallbackQuery, bot: Bot) -> None:
 # ---------------------------------------------------------------------------
 # Instagram (stub)
 # ---------------------------------------------------------------------------
+
 
 async def _send_social_stub(message: Message, name: str) -> None:
     await message.answer(

@@ -64,6 +64,7 @@ async def on_group_interaction(message: Message) -> None:
 # /server command (owner only)
 # ---------------------------------------------------------------------------
 
+
 @router.message(Command("server"))
 async def on_server(message: Message) -> None:
     if not message.from_user:

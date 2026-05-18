@@ -1,4 +1,5 @@
 """Admin princesse screen: pool per chat, history, test ritual."""
+
 from __future__ import annotations
 
 import logging
@@ -65,7 +66,13 @@ async def remove_member(
 ) -> RedirectResponse:
     _check_csrf(request, csrf_token)
     removed = await princesse_repo.remove_member(chat_id, target_user_id)
-    logger.info("Admin %d removed user %d from princesse pool (chat=%d, found=%s)", user_id, target_user_id, chat_id, removed)
+    logger.info(
+        "Admin %d removed user %d from princesse pool (chat=%d, found=%s)",
+        user_id,
+        target_user_id,
+        chat_id,
+        removed,
+    )
     return RedirectResponse("/admin/princesse", status_code=303)
 
 

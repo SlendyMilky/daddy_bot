@@ -1,4 +1,5 @@
 """Session management helpers: cookie signing + admin_sessions DB operations."""
+
 from __future__ import annotations
 
 import secrets

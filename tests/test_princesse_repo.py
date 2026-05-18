@@ -1,4 +1,5 @@
 """Tests for princesse_repo: pool upsert/remove, state KV, history."""
+
 from __future__ import annotations
 
 import pytest
@@ -19,7 +20,9 @@ async def test_pool_upsert_and_remove(temp_db):
     assert changed is False
 
     # Profile change -> change reported.
-    changed = await princesse_repo.upsert_member(chat, PoolMember(user_id=1, first_name="A2", username="alpha"))
+    changed = await princesse_repo.upsert_member(
+        chat, PoolMember(user_id=1, first_name="A2", username="alpha")
+    )
     assert changed is True
 
     pool = await princesse_repo.list_pool(chat)

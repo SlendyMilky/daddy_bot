@@ -1,4 +1,5 @@
 """Admin db_browse screen: paginated read-only table view."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request
@@ -35,9 +36,7 @@ async def db_browse(
     conn = await get_connection()
 
     # List all tables from sqlite_master as allowed
-    async with conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    ) as cur:
+    async with conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name") as cur:
         all_tables = [r[0] for r in await cur.fetchall()]
 
     rows: list[tuple] = []
@@ -53,7 +52,8 @@ async def db_browse(
 
             offset = (page - 1) * _PAGE_SIZE
             async with conn.execute(
-                f"SELECT * FROM [{table}] LIMIT ? OFFSET ?", (_PAGE_SIZE, offset)  # noqa: S608
+                f"SELECT * FROM [{table}] LIMIT ? OFFSET ?",
+                (_PAGE_SIZE, offset),  # noqa: S608
             ) as cur:
                 rows = await cur.fetchall()
                 if cur.description:

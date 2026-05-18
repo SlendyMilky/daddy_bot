@@ -1,4 +1,5 @@
 """Admin logs screen: in-memory ring buffer + SSE stream endpoint."""
+
 from __future__ import annotations
 
 import asyncio
@@ -74,7 +75,7 @@ async def logs_stream(request: Request, user_id: RequireOwner) -> StreamingRespo
                     payload = json.dumps(entry)
                     yield f"data: {payload}\n\n".encode()
                 except TimeoutError:
-                    yield b"data: {\"keep\":\"alive\"}\n\n"
+                    yield b'data: {"keep":"alive"}\n\n'
         finally:
             if queue in _subscribers:
                 _subscribers.remove(queue)

@@ -1,4 +1,5 @@
 """Shared helpers for building HTML Telegram user mentions."""
+
 from __future__ import annotations
 
 import html

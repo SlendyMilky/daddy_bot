@@ -161,8 +161,7 @@ def _detect_ext(raw: bytes, fallback: str) -> str:
 
 _RESUME_MODEL = "gpt-4o"
 _RESUME_AUDIO_SYSTEM = (
-    "Tu dois résumer en français le message que tu reçois, "
-    "ce message est une transcription audio."
+    "Tu dois résumer en français le message que tu reçois, ce message est une transcription audio."
 )
 _RESUME_URL_SYSTEM = "Tu dois résumer de façon très brève en français le contenu que tu reçois."
 _WHISPER_COST_PER_SEC = 0.0001  # $0.006/min = $0.0001/sec
@@ -534,10 +533,14 @@ async def on_t2i_message(message: Message) -> None:
     if not get_settings().openai_api_key:
         await message.reply("OPENAI_API_KEY non configurée.", parse_mode="HTML")
         return
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Standard", callback_data=_T2iQuality(quality="standard").pack()),
-        InlineKeyboardButton(text="HD", callback_data=_T2iQuality(quality="hd").pack()),
-    ]])
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Standard", callback_data=_T2iQuality(quality="standard").pack()),
+                InlineKeyboardButton(text="HD", callback_data=_T2iQuality(quality="hd").pack()),
+            ]
+        ]
+    )
     await message.reply("Génération Standard ou HD ?", reply_markup=keyboard)
 
 
@@ -547,13 +550,17 @@ async def on_t2i_quality(callback: CallbackQuery, callback_data: _T2iQuality) ->
     if not _t2i_is_owner(callback.from_user.id):
         await callback.answer("⛔ Accès non autorisé.", show_alert=True)
         return
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text=label,
-            callback_data=_T2iSize(quality=callback_data.quality, size=api_size).pack(),
-        )
-        for label, api_size in _T2I_SIZES
-    ]])
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=_T2iSize(quality=callback_data.quality, size=api_size).pack(),
+                )
+                for label, api_size in _T2I_SIZES
+            ]
+        ]
+    )
     if callback.message:
         await callback.message.edit_text("Résolution de l'image ?", reply_markup=keyboard)
     await callback.answer()
@@ -579,9 +586,11 @@ async def on_t2i_size(callback: CallbackQuery, callback_data: _T2iSize) -> None:
 # ── Step 4: user replies to the ForceReply with their prompt ─────────────────
 @router.message(
     F.func(
-        lambda m: isinstance(m, Message)
-        and bool(m.reply_to_message)
-        and _T2I_PROMPT_MARKER in (m.reply_to_message.text or "")
+        lambda m: (
+            isinstance(m, Message)
+            and bool(m.reply_to_message)
+            and _T2I_PROMPT_MARKER in (m.reply_to_message.text or "")
+        )
     )
 )
 async def on_t2i_reply_chain(message: Message) -> None:

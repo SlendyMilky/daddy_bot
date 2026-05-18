@@ -1,4 +1,5 @@
 """Telegram OpenID Connect client (PKCE + authlib JWT validation)."""
+
 from __future__ import annotations
 
 import base64

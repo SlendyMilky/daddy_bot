@@ -1,4 +1,5 @@
 """Admin panel auth routes: login (OIDC redirect), callback, logout."""
+
 from __future__ import annotations
 
 import logging

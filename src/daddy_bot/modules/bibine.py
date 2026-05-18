@@ -81,10 +81,7 @@ def _random_window_datetime(friday_date: datetime.date, tz: ZoneInfo) -> datetim
 
 
 def _build_bibine_message(mentions_html: str) -> str:
-    return (
-        "🍺 Bibine vendredi soir ?\n"
-        f"\n👀 Ping: {mentions_html}"
-    )
+    return f"🍺 Bibine vendredi soir ?\n\n👀 Ping: {mentions_html}"
 
 
 def _poll_key(chat_id: int, message_id: int) -> str:
@@ -125,6 +122,7 @@ async def _load_place_state() -> dict[str, dict]:
     import json as _json
 
     from daddy_bot.core.db import get_connection as _get_conn
+
     conn = await _get_conn()
     out: dict[str, dict] = {}
     async with conn.execute(
@@ -167,15 +165,20 @@ async def _save_place_state(place_state: dict[str, dict]) -> None:
 
 def _build_poll_keyboard(yes_count: int, no_count: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[
-            InlineKeyboardButton(text=f"✅ Chaud ({yes_count})", callback_data="bibine:yes"),
-            InlineKeyboardButton(text=f"❌ Pas chaud ({no_count})", callback_data="bibine:no"),
-        ]]
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=f"✅ Chaud ({yes_count})", callback_data="bibine:yes"),
+                InlineKeyboardButton(text=f"❌ Pas chaud ({no_count})", callback_data="bibine:no"),
+            ]
+        ]
     )
 
 
 def _build_poll_text(mentions_html: str, yes_votes: list[dict], no_votes: list[dict]) -> str:
-    yes_mentions = " ".join(_mention_html(int(v["user_id"]), str(v["label"])) for v in yes_votes) or "Personne pour l'instant"
+    yes_mentions = (
+        " ".join(_mention_html(int(v["user_id"]), str(v["label"])) for v in yes_votes)
+        or "Personne pour l'instant"
+    )
     no_mentions = " ".join(_mention_html(int(v["user_id"]), str(v["label"])) for v in no_votes) or "Personne"
     return (
         f"{_build_bibine_message(mentions_html)}\n\n"
@@ -201,12 +204,14 @@ def _build_place_keyboard(proposals: list[dict], votes: list[dict]) -> InlineKey
     rows: list[list[InlineKeyboardButton]] = []
     for idx, proposal in enumerate(proposals):
         name = str(proposal.get("name") or proposal.get("query") or f"Option {idx + 1}")
-        rows.append([
-            InlineKeyboardButton(
-                text=f"📍 {name[:30]} ({counts.get(idx, 0)})",
-                callback_data=f"bibine_place:{idx}",
-            )
-        ])
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"📍 {name[:30]} ({counts.get(idx, 0)})",
+                    callback_data=f"bibine_place:{idx}",
+                )
+            ]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -226,7 +231,7 @@ def _build_place_poll_text(week_iso: str, proposals: list[dict], votes: list[dic
         lines.append(
             f"{idx + 1}. <b>{name}</b> ({counts.get(idx, 0)} votes)\n"
             f"   {address}\n"
-            f"   <a href=\"{link}\">Voir sur la map</a>"
+            f'   <a href="{link}">Voir sur la map</a>'
         )
     return "\n".join(lines)
 
@@ -323,7 +328,9 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
     proposer = message.from_user
     proposer_id = proposer.id if proposer else 0
     proposer_label = (
-        f"@{proposer.username}" if proposer and proposer.username else (proposer.first_name if proposer else "Utilisateur")
+        f"@{proposer.username}"
+        if proposer and proposer.username
+        else (proposer.first_name if proposer else "Utilisateur")
     )
     normalized = _normalize_place_name(str(place["name"]))
     existing_idx = next(
@@ -417,7 +424,7 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
                         text=(
                             f"✅ Une seule proposition restante: "
                             f"<b>{html.escape(str(proposals[0].get('name') or 'Bar'))}</b>\n"
-                            f"<a href=\"{html.escape(_map_link(float(proposals[0]['lat']), float(proposals[0]['lon'])))}\">"
+                            f'<a href="{html.escape(_map_link(float(proposals[0]["lat"]), float(proposals[0]["lon"])))}">'
                             "Voir sur la map</a>"
                         ),
                         parse_mode="HTML",
@@ -425,7 +432,9 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
                     )
                 except TelegramBadRequest as exc:
                     if "message is not modified" not in str(exc).lower():
-                        logger.warning("Could not update bibine place poll to single remaining place: %s", exc)
+                        logger.warning(
+                            "Could not update bibine place poll to single remaining place: %s", exc
+                        )
             else:
                 try:
                     await message.bot.edit_message_text(
@@ -462,7 +471,7 @@ async def _handle_bibine_place_proposal(message: Message, place_query: str) -> N
         only_place = proposals[0]
         await message.reply(
             f"✅ Une seule proposition pour l'instant: <b>{html.escape(str(only_place.get('name') or place_query))}</b>\n"
-            f"<a href=\"{html.escape(_map_link(float(only_place['lat']), float(only_place['lon'])))}\">Voir sur la map</a>",
+            f'<a href="{html.escape(_map_link(float(only_place["lat"]), float(only_place["lon"])))}">Voir sur la map</a>',
             parse_mode="HTML",
             disable_notification=True,
         )
@@ -571,8 +580,10 @@ async def on_bibine_vote(callback: CallbackQuery) -> None:
         return
 
     user_id = callback.from_user.id
-    label = f"@{callback.from_user.username}" if callback.from_user.username else (
-        callback.from_user.first_name or "Utilisateur"
+    label = (
+        f"@{callback.from_user.username}"
+        if callback.from_user.username
+        else (callback.from_user.first_name or "Utilisateur")
     )
     voter = {"user_id": user_id, "label": label}
 
@@ -629,8 +640,10 @@ async def on_bibine_place_vote(callback: CallbackQuery) -> None:
         return
 
     user_id = callback.from_user.id
-    label = f"@{callback.from_user.username}" if callback.from_user.username else (
-        callback.from_user.first_name or "Utilisateur"
+    label = (
+        f"@{callback.from_user.username}"
+        if callback.from_user.username
+        else (callback.from_user.first_name or "Utilisateur")
     )
     votes = [v for v in votes if int(v.get("user_id", 0)) != user_id]
     votes.append({"user_id": user_id, "label": label, "proposal_idx": proposal_idx})
@@ -789,7 +802,9 @@ async def run_bibine_scheduler(bot: Bot) -> None:
             state["scheduled_week"] = target_week
             state["scheduled_at"] = scheduled_at.isoformat()
             await _save_state(state)
-            logger.info("New bibine reminder scheduled for week %s at %s.", target_week, scheduled_at.isoformat())
+            logger.info(
+                "New bibine reminder scheduled for week %s at %s.", target_week, scheduled_at.isoformat()
+            )
 
         wait_seconds = (scheduled_at - now).total_seconds()
         if wait_seconds > 0:

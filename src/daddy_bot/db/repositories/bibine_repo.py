@@ -1,4 +1,5 @@
 """SQLite-backed repository for bibine subscribers, scheduler state, polls and place votes."""
+
 from __future__ import annotations
 
 import html
@@ -21,6 +22,7 @@ class BibineSubscriber:
 
 
 # --- Subscribers -----------------------------------------------------------------
+
 
 async def add_subscriber(subscriber: BibineSubscriber) -> None:
     conn = await get_connection()
@@ -56,6 +58,7 @@ async def list_subscribers() -> list[BibineSubscriber]:
 
 # --- Scheduler state (key/value) -------------------------------------------------
 
+
 async def get_state(key: str) -> str | None:
     conn = await get_connection()
     async with conn.execute("SELECT value FROM bibine_state WHERE key=?", (key,)) as cur:
@@ -86,6 +89,7 @@ async def all_state() -> dict[str, str]:
 
 
 # --- Polls (ping or place) -------------------------------------------------------
+
 
 async def get_poll(chat_id: int, message_id: int) -> dict | None:
     conn = await get_connection()
@@ -133,17 +137,20 @@ async def list_active_polls() -> list[dict]:
             payload = {}
         if not isinstance(payload, dict):
             payload = {}
-        out.append({
-            "chat_id": r[0],
-            "message_id": r[1],
-            "type": r[2],
-            "payload": payload,
-            "created_at": r[4],
-        })
+        out.append(
+            {
+                "chat_id": r[0],
+                "message_id": r[1],
+                "type": r[2],
+                "payload": payload,
+                "created_at": r[4],
+            }
+        )
     return out
 
 
 # --- Place state (per chat/week) -------------------------------------------------
+
 
 async def get_place_state(chat_id: int, week_iso: str) -> dict | None:
     conn = await get_connection()

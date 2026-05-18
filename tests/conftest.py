@@ -1,4 +1,5 @@
 """Shared pytest fixtures: each test gets a fresh aiosqlite connection pointing at a temp DB."""
+
 from __future__ import annotations
 
 from pathlib import Path

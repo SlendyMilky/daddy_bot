@@ -1,4 +1,5 @@
 """Tests for web auth: OIDC helpers, session gate, owner gating, CSRF."""
+
 from __future__ import annotations
 
 import time
@@ -15,6 +16,7 @@ from daddy_bot.web.sessions import sign_session_id, unsign_session_id
 # ---------------------------------------------------------------------------
 # PKCE helpers
 # ---------------------------------------------------------------------------
+
 
 def test_pkce_pair_lengths():
     verifier, challenge = generate_pkce_pair()
@@ -42,6 +44,7 @@ def test_code_challenge_base64url_no_padding():
 # Session cookie signing
 # ---------------------------------------------------------------------------
 
+
 def test_sign_unsign_round_trip():
     key = "supersecret"
     sid = "mysessionid123"
@@ -63,6 +66,7 @@ def test_unsign_garbage_returns_none():
 # ---------------------------------------------------------------------------
 # CSRF token
 # ---------------------------------------------------------------------------
+
 
 def test_csrf_valid():
     key = "secret"
@@ -89,6 +93,7 @@ def test_csrf_tampered():
 # ---------------------------------------------------------------------------
 # OIDC client: build_authorization_url
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_build_authorization_url():
@@ -122,6 +127,7 @@ async def test_build_authorization_url():
 # OIDC client: exchange_code validates JWT claims
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_exchange_code_aud_mismatch():
     """exchange_code raises ValueError when JWT aud doesn't match client_id."""
@@ -131,7 +137,9 @@ async def test_exchange_code_aud_mismatch():
 
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     jwk = JsonWebKey.import_key(private_key, {"kty": "RSA", "use": "sig", "kid": "testkey"})
-    public_jwk = JsonWebKey.import_key(private_key.public_key(), {"kty": "RSA", "use": "sig", "kid": "testkey"})
+    public_jwk = JsonWebKey.import_key(
+        private_key.public_key(), {"kty": "RSA", "use": "sig", "kid": "testkey"}
+    )
 
     now = int(time.time())
     payload = {
@@ -160,6 +168,7 @@ async def test_exchange_code_aud_mismatch():
 
     key_set_data = {"keys": [public_jwk.as_dict()]}
     from authlib.jose import JsonWebKey as JWK
+
     client._jwks = JWK.import_key_set(key_set_data)
 
     mock_resp = MagicMock()
@@ -231,6 +240,7 @@ async def test_exchange_code_expired_token():
 # Web: protected route redirects without cookie
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 async def admin_app():
     """Create a minimal admin FastAPI app bound to an in-memory DB."""
@@ -262,6 +272,7 @@ async def admin_app():
     with patch("daddy_bot.core.config.get_settings", return_value=settings):
         with patch("daddy_bot.web.app._resolve_secret_key", return_value="testsecretkey123"):
             from daddy_bot.web.app import create_admin_app
+
             app = create_admin_app(bot=None, settings=settings)
             app.state.secret_key = "testsecretkey123"
             app.state.settings = settings
@@ -327,6 +338,7 @@ async def test_owner_dependency_non_owner_forbidden(tmp_path: Path):
     with patch("daddy_bot.core.config.get_settings", return_value=settings):
         with patch("daddy_bot.web.app._resolve_secret_key", return_value=secret_key):
             from daddy_bot.web.app import create_admin_app
+
             app = create_admin_app(bot=None, settings=settings)
             app.state.secret_key = secret_key
             app.state.settings = settings
