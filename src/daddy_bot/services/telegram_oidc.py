@@ -153,6 +153,10 @@ class TelegramOIDCClient:
         jwks = await self._load_jwks()
         claims: JWTClaims = authlib_jwt.decode(id_token, jwks)
         claims.validate(now=int(time.time()))
+        logger.debug(
+            "id_token claims (sub redacted): %s",
+            {k: v for k, v in claims.items() if k != "sub"},
+        )
 
         # Validate standard claims
         if claims.get("aud") != self.client_id and self.client_id not in (claims.get("aud") or []):
@@ -162,8 +166,23 @@ class TelegramOIDCClient:
         if not sub:
             raise ValueError("id_token missing sub claim")
 
+        # Telegram's sub is an internal opaque value, not the Telegram user ID.
+        # The actual Telegram user ID is in the "id" claim (integer).
+        # Fall back to sub only if "id" is absent (forward-compat).
+        tg_id = claims.get("id") or claims.get("telegram_id")
+        if tg_id is not None:
+            user_id = int(tg_id)
+        else:
+            logger.warning(
+                "Telegram id_token has no 'id' claim — falling back to sub=%s. "
+                "Full claims (minus sensitive): %s",
+                sub,
+                {k: v for k, v in claims.items() if k not in ("sub", "nonce")},
+            )
+            user_id = int(sub)
+
         return TelegramIdentity(
-            user_id=int(sub),
+            user_id=user_id,
             username=claims.get("preferred_username") or claims.get("username"),
             first_name=claims.get("given_name") or claims.get("first_name"),
             photo_url=claims.get("picture"),
