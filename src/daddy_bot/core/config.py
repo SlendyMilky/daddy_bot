@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     telegram_oidc_client_id: str | None = Field(default=None, alias="TELEGRAM_OIDC_CLIENT_ID")
     telegram_oidc_client_secret: str | None = Field(default=None, alias="TELEGRAM_OIDC_CLIENT_SECRET")
     telegram_oidc_discovery_url: str = Field(
-        default="https://id.telegram.org/.well-known/openid-configuration",
+        default="https://oauth.telegram.org/.well-known/openid-configuration",
         alias="TELEGRAM_OIDC_DISCOVERY_URL",
     )
 

@@ -82,7 +82,7 @@ class TelegramOIDCClient:
             except Exception:
                 pass
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             resp = await client.get(self.discovery_url)
             resp.raise_for_status()
             data: dict[str, Any] = resp.json()

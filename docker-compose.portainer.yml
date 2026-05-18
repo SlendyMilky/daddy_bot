@@ -30,7 +30,7 @@ services:
       ADMIN_SESSION_TTL_HOURS: ${ADMIN_SESSION_TTL_HOURS:-168}
       TELEGRAM_OIDC_CLIENT_ID: ${TELEGRAM_OIDC_CLIENT_ID:-}
       TELEGRAM_OIDC_CLIENT_SECRET: ${TELEGRAM_OIDC_CLIENT_SECRET:-}
-      TELEGRAM_OIDC_DISCOVERY_URL: ${TELEGRAM_OIDC_DISCOVERY_URL:-https://id.telegram.org/.well-known/openid-configuration}
+      TELEGRAM_OIDC_DISCOVERY_URL: ${TELEGRAM_OIDC_DISCOVERY_URL:-https://oauth.telegram.org/.well-known/openid-configuration}
     ports:
       - "${ADMIN_WEB_PORT:-8080}:8080"
     volumes:
