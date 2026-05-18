@@ -28,8 +28,7 @@ async def record(
     )
     # Cap log at 500 rows to avoid unbounded growth
     await conn.execute(
-        "DELETE FROM broadcast_log WHERE id NOT IN "
-        "(SELECT id FROM broadcast_log ORDER BY id DESC LIMIT 500)"
+        "DELETE FROM broadcast_log WHERE id NOT IN (SELECT id FROM broadcast_log ORDER BY id DESC LIMIT 500)"
     )
     await conn.commit()
 
