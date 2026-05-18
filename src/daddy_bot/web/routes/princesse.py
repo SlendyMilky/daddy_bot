@@ -44,9 +44,9 @@ async def princesse_page(request: Request, user_id: RequireOwner) -> HTMLRespons
     state = await princesse_repo.all_state()
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "princesse.html",
         {
-            "request": request,
             "user_id": user_id,
             "pools": pools,
             "history": history,

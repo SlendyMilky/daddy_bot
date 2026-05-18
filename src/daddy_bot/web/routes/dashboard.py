@@ -24,9 +24,9 @@ async def dashboard(request: Request, user_id: RequireOwner) -> HTMLResponse:
     csrf = generate_csrf_token(request.app.state.secret_key, sid) if sid else ""
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "dashboard.html",
         {
-            "request": request,
             "user_id": user_id,
             "chat_count": chat_count,
             "subscriber_count": len(subscribers),

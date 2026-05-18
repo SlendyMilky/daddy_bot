@@ -55,8 +55,9 @@ def install_log_handler() -> None:
 async def logs_page(request: Request, user_id: RequireOwner) -> HTMLResponse:
     recent = list(log_buffer)[-200:]
     return request.app.state.templates.TemplateResponse(
+        request,
         "logs.html",
-        {"request": request, "user_id": user_id, "recent_logs": recent},
+        {"user_id": user_id, "recent_logs": recent},
     )
 
 

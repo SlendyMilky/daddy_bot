@@ -64,9 +64,9 @@ async def db_browse(
     total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "db_browse.html",
         {
-            "request": request,
             "user_id": user_id,
             "all_tables": all_tables,
             "table": table,

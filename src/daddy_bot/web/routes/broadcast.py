@@ -40,9 +40,9 @@ async def broadcast_page(request: Request, user_id: RequireOwner) -> HTMLRespons
     log = await broadcast_repo.list_recent(limit=50)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "broadcast.html",
         {
-            "request": request,
             "user_id": user_id,
             "chats": chats,
             "log": log,

@@ -41,9 +41,9 @@ async def bibine_page(request: Request, user_id: RequireOwner) -> HTMLResponse:
     state = await bibine_repo.all_state()
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "bibine.html",
         {
-            "request": request,
             "user_id": user_id,
             "subscribers": subscribers,
             "polls": polls,
