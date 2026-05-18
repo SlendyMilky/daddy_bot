@@ -3,8 +3,8 @@ import contextlib
 import time
 
 from aiogram import Router
-from aiogram.filters import CommandStart
 from aiogram.enums import ChatAction
+from aiogram.filters import CommandStart
 from aiogram.types import Message
 
 from daddy_bot.core.config import get_settings

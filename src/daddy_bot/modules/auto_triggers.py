@@ -434,10 +434,7 @@ def _update_maiscsupersa_streak(user_id: int, now: datetime) -> int:
         streak = 1
     else:
         previous_streak, previous_at = previous
-        if now - previous_at <= _MAISCSUPERSA_STREAK_WINDOW:
-            streak = min(previous_streak + 1, 12)
-        else:
-            streak = 1
+        streak = min(previous_streak + 1, 12) if now - previous_at <= _MAISCSUPERSA_STREAK_WINDOW else 1
 
     _maiscsupersa_user_streaks[user_id] = (streak, now)
     return streak

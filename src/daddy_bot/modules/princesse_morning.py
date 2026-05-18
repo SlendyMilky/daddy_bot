@@ -207,10 +207,7 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
                 await asyncio.sleep(_seconds_until_tomorrow_early(now, tz))
                 continue
 
-            if now < win_start:
-                effective_start = win_start
-            else:
-                effective_start = now
+            effective_start = win_start if now < win_start else now
 
             span_sec = int((win_end - effective_start).total_seconds())
             if span_sec <= 0:

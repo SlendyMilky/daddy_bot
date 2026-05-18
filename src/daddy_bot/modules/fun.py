@@ -1,7 +1,9 @@
+import contextlib
 import html
 import json
 import logging
 import random
+from datetime import UTC
 from pathlib import Path
 
 import httpx
@@ -56,10 +58,8 @@ async def on_nineball(message: Message) -> None:
         await message.reply("Aucune réponse disponible.", disable_notification=True)
         return
     text = random.choice(_NINEBALL_ENTRIES)
-    try:
+    with contextlib.suppress(TelegramBadRequest):
         await message.delete()
-    except TelegramBadRequest:
-        pass
     await message.answer(text, parse_mode="HTML", disable_notification=True)
 
 
@@ -86,8 +86,8 @@ async def on_think(message: Message) -> None:
         title_en = post["title"]
         post_url = f"https://reddit.com{post['permalink']}"
         upvotes = post.get("ups", 0)
-        from datetime import datetime, timezone
-        created = datetime.fromtimestamp(post.get("created_utc", 0), tz=timezone.utc)
+        from datetime import datetime
+        created = datetime.fromtimestamp(post.get("created_utc", 0), tz=UTC)
         date_str = created.strftime("%d.%m.%y")
 
         settings = get_settings()

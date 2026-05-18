@@ -3,11 +3,10 @@ import base64
 import html
 import json
 import logging
+import re
 
 import httpx
 import trafilatura
-import re
-
 from aiogram import Bot, F, Router
 from aiogram.enums import MessageEntityType
 from aiogram.filters import Command
