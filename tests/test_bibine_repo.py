@@ -67,6 +67,20 @@ async def test_poll_json_payload(temp_db):
 
 
 @pytest.mark.asyncio
+async def test_save_poll_keeps_newest_when_created_at_ties(temp_db):
+    """Retention must not drop the latest message when created_at has second precision."""
+    cid = -1001153426467
+    for mid in (10, 20, 30):
+        await bibine_repo.save_poll(
+            cid, mid, "ping", {"mentions_html": "x", "yes_votes": [], "no_votes": []}
+        )
+    await bibine_repo.save_poll(
+        cid, 40, "ping", {"mentions_html": "y", "yes_votes": [], "no_votes": []}
+    )
+    assert await bibine_repo.get_poll(cid, 40) is not None
+
+
+@pytest.mark.asyncio
 async def test_place_state(temp_db):
     proposals = [{"name": "Bar A", "lat": 1.0, "lon": 2.0}]
     await bibine_repo.save_place_state(-1, "2026-05-22", 555, proposals)

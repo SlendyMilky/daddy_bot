@@ -127,7 +127,7 @@ async def save_poll(chat_id: int, message_id: int, poll_type: str, payload: dict
         WHERE chat_id=? AND type=? AND message_id NOT IN (
             SELECT message_id FROM bibine_polls
             WHERE chat_id=? AND type=?
-            ORDER BY created_at DESC LIMIT 3
+            ORDER BY created_at DESC, message_id DESC LIMIT 3
         )
         """,
         (chat_id, poll_type, chat_id, poll_type),
