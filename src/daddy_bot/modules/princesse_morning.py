@@ -167,11 +167,14 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
 
     start_h = settings.princesse_morning_start_hour
     end_h = settings.princesse_morning_end_hour
+    send_chance = settings.princesse_morning_send_chance
     logger.info(
-        "Princesse morning scheduler enabled, window [%02d:00, %02d:00) %s, Mon–Fri only (voice dir=%s).",
+        "Princesse morning scheduler enabled, window [%02d:00, %02d:00) %s, Mon–Fri only, "
+        "send chance=%.0f%% (voice dir=%s).",
         start_h,
         end_h,
         tz.key,
+        send_chance * 100,
         _PRINCESSE_DIR,
     )
 
@@ -258,6 +261,20 @@ async def run_princesse_morning_scheduler(bot: Bot) -> None:
         if not voices:
             logger.warning(
                 "Princesse morning: no .ogg voice files in %s, skipping %s.", _PRINCESSE_DIR, day_key
+            )
+            state["last_sent_date"] = day_key
+            state.pop("scheduled_date", None)
+            state.pop("scheduled_at", None)
+            await _save_state(state)
+            continue
+
+        roll = random.random()
+        if roll >= send_chance:
+            logger.info(
+                "Princesse morning skipped for %s (roll=%.4f, chance=%.2f).",
+                day_key,
+                roll,
+                send_chance,
             )
             state["last_sent_date"] = day_key
             state.pop("scheduled_date", None)

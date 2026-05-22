@@ -32,6 +32,12 @@ class Settings(BaseSettings):
         default="-1001153426467,-1001805681499",
         alias="PRINCESSE_MORNING_CHAT_IDS",
     )
+    princesse_morning_send_chance: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        alias="PRINCESSE_MORNING_SEND_CHANCE",
+    )
 
     # --- Admin web panel ---------------------------------------------------------
     admin_web_enabled: bool = Field(default=True, alias="ADMIN_WEB_ENABLED")
