@@ -71,12 +71,8 @@ async def test_save_poll_keeps_newest_when_created_at_ties(temp_db):
     """Retention must not drop the latest message when created_at has second precision."""
     cid = -1001153426467
     for mid in (10, 20, 30):
-        await bibine_repo.save_poll(
-            cid, mid, "ping", {"mentions_html": "x", "yes_votes": [], "no_votes": []}
-        )
-    await bibine_repo.save_poll(
-        cid, 40, "ping", {"mentions_html": "y", "yes_votes": [], "no_votes": []}
-    )
+        await bibine_repo.save_poll(cid, mid, "ping", {"mentions_html": "x", "yes_votes": [], "no_votes": []})
+    await bibine_repo.save_poll(cid, 40, "ping", {"mentions_html": "y", "yes_votes": [], "no_votes": []})
     assert await bibine_repo.get_poll(cid, 40) is not None
 
 
